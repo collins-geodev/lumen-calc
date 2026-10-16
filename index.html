@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lumen — Smart Omni Calculator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css?v=5" />
+  </head>
+  <body>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+    <div class="orb orb-c" aria-hidden="true"></div>
+
+    <main class="stage">
+      <section class="chassis sci-mode" id="chassis" data-panel="calc">
+        <div class="shine-ring" aria-hidden="true"></div>
+        <div class="calc">
+          <header class="brand">
+            <div>
+              <p class="mark">Lumen</p>
+              <p class="tag" id="tagline">smart · scientific · shine</p>
+            </div>
+            <div class="brand-actions" id="panelActions">
+              <button type="button" class="ghost active panel-only calc" id="modeBtn" title="Toggle scientific pad">
+                Sci
+              </button>
+              <button type="button" class="ghost panel-only calc" id="angleBtn" title="Degrees / Radians">
+                Deg
+              </button>
+              <button type="button" class="ghost panel-only currency" id="fxRefreshBtn" title="Sync live rates">
+                Sync
+              </button>
+              <button type="button" class="ghost" id="historyBtn" title="History (H)">History</button>
+              <button type="button" class="ghost" id="copyBtn" title="Copy result (Ctrl+C)">Copy</button>
+            </div>
+          </header>
+
+          <nav class="mode-nav" id="modeNav" aria-label="Calculator modes">
+            <button type="button" class="mode-tab active" data-panel="calc" title="Calculator">
+              <span class="ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect class="ico-pulse" x="4" y="3" width="16" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 8h8M8 12h2.5M13.5 12H16M8 16h2.5M13.5 16H16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </span>
+              <span>Calc</span>
+            </button>
+            <button type="button" class="mode-tab" data-panel="currency" title="Live currency">
+              <span class="ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle class="ico-spin" cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v10M9.5 9.2c.7-1 2.8-1.3 3.7-.2.9 1.1-.1 2.2-1.7 2.5-1.7.3-2.8 1.3-1.9 2.5.8 1.1 2.8 1 3.7-.1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </span>
+              <span>FX</span>
+            </button>
+            <button type="button" class="mode-tab" data-panel="units" title="Unit converter">
+              <span class="ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path class="ico-bounce" d="M7 5h4v14H7zM13 9h4v10h-4z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 19h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </span>
+              <span>Units</span>
+            </button>
+            <button type="button" class="mode-tab" data-panel="programmer" title="Programmer">
+              <span class="ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path class="ico-blink" d="M8 9l-3 3 3 3M16 9l3 3-3 3M13 7l-2 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+              <span>Code</span>
+            </button>
+            <button type="button" class="mode-tab" data-panel="ai" title="AI math assist">
+              <span class="ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path class="ico-glow" d="M12 3l1.4 4.2L18 8.6l-4.2 1.4L12 14l-1.4-4-4.2-1.4 4.2-1.4L12 3z" fill="currentColor" opacity=".9"/><circle cx="18.5" cy="16.5" r="1.4" class="ico-twinkle" fill="currentColor"/><circle cx="6" cy="17" r="1" class="ico-twinkle delay" fill="currentColor"/></svg>
+              </span>
+              <span>AI</span>
+            </button>
+          </nav>
+
+          <!-- CALC PANEL -->
+          <div class="panel active" id="panel-calc" data-panel="calc">
+            <div class="display" id="display">
+              <div class="status-row">
+                <p class="hint" id="hint">Type or tap · live preview on</p>
+                <p class="badges">
+                  <span class="badge" id="angleBadge">DEG</span>
+                  <span class="badge mem" id="memBadge" hidden>M</span>
+                </p>
+              </div>
+              <p class="expr" id="expr" aria-live="polite"></p>
+              <p class="result" id="result">0.00</p>
+              <p class="preview" id="preview"></p>
+            </div>
+
+            <div class="pad">
+              <div class="sci-keys" id="sciKeys">
+                <button type="button" data-act="second" class="fn shift" id="secondBtn" title="2nd functions">2<sup>nd</sup></button>
+                <button type="button" data-fn="sin" class="fn" data-alt="asin" data-label="sin" data-alt-label="sin⁻¹">sin</button>
+                <button type="button" data-fn="cos" class="fn" data-alt="acos" data-label="cos" data-alt-label="cos⁻¹">cos</button>
+                <button type="button" data-fn="tan" class="fn" data-alt="atan" data-label="tan" data-alt-label="tan⁻¹">tan</button>
+                <button type="button" data-fn="ln" class="fn" data-alt="exp" data-label="ln" data-alt-label="eˣ">ln</button>
+                <button type="button" data-fn="log" class="fn" data-alt="pow10" data-label="log" data-alt-label="10ˣ">log</button>
+                <button type="button" data-fn="log2" class="fn" data-alt="pow2" data-label="log₂" data-alt-label="2ˣ">log₂</button>
+                <button type="button" data-act="square" class="fn">x²</button>
+                <button type="button" data-act="cube" class="fn">x³</button>
+                <button type="button" data-act="pow" class="fn">x<sup>y</sup></button>
+                <button type="button" data-fn="sqrt" class="fn" data-alt="cbrt" data-label="√" data-alt-label="∛">√</button>
+                <button type="button" data-act="inv" class="fn">1/x</button>
+                <button type="button" data-act="fact" class="fn">n!</button>
+                <button type="button" data-fn="abs" class="fn">|x|</button>
+                <button type="button" data-fn="exp" class="fn">e<sup>x</sup></button>
+                <button type="button" data-const="pi" class="fn">π</button>
+                <button type="button" data-const="e" class="fn">e</button>
+                <button type="button" data-act="rand" class="fn">Rnd</button>
+                <button type="button" data-act="ans" class="fn">Ans</button>
+                <button type="button" data-fn="sinh" class="fn" data-alt="asinh" data-label="sinh" data-alt-label="sinh⁻¹">sinh</button>
+                <button type="button" data-fn="cosh" class="fn" data-alt="acosh" data-label="cosh" data-alt-label="cosh⁻¹">cosh</button>
+                <button type="button" data-fn="tanh" class="fn" data-alt="atanh" data-label="tanh" data-alt-label="tanh⁻¹">tanh</button>
+                <button type="button" data-fn="floor" class="fn">⌊x⌋</button>
+                <button type="button" data-fn="ceil" class="fn">⌈x⌉</button>
+                <button type="button" data-fn="round" class="fn">rnd</button>
+              </div>
+
+              <div class="mem-keys" id="memKeys">
+                <button type="button" data-mem="mc" class="mem">MC</button>
+                <button type="button" data-mem="mr" class="mem">MR</button>
+                <button type="button" data-mem="mplus" class="mem">M+</button>
+                <button type="button" data-mem="mminus" class="mem">M−</button>
+                <button type="button" data-mem="ms" class="mem">MS</button>
+              </div>
+
+              <div class="keys" id="keys">
+                <button type="button" data-key="(" class="fn">(</button>
+                <button type="button" data-key=")" class="fn">)</button>
+                <button type="button" data-act="clear" class="warn">C</button>
+                <button type="button" data-act="back" class="fn" title="Backspace">⌫</button>
+                <button type="button" data-op="/" class="op">÷</button>
+                <button type="button" data-digit="7">7</button>
+                <button type="button" data-digit="8">8</button>
+                <button type="button" data-digit="9">9</button>
+                <button type="button" data-op="*" class="op">×</button>
+                <button type="button" data-act="percent" class="fn">%</button>
+                <button type="button" data-digit="4">4</button>
+                <button type="button" data-digit="5">5</button>
+                <button type="button" data-digit="6">6</button>
+                <button type="button" data-op="-" class="op">−</button>
+                <button type="button" data-act="mod" class="fn">mod</button>
+                <button type="button" data-digit="1">1</button>
+                <button type="button" data-digit="2">2</button>
+                <button type="button" data-digit="3">3</button>
+                <button type="button" data-op="+" class="op">+</button>
+                <button type="button" data-act="pow" class="fn">^</button>
+                <button type="button" data-act="sign" class="fn">±</button>
+                <button type="button" data-digit="0">0</button>
+                <button type="button" data-act="dot">.</button>
+                <button type="button" data-act="ee" class="fn">EE</button>
+                <button type="button" data-act="equals" class="eq">=</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- CURRENCY PANEL -->
+          <div class="panel" id="panel-currency" data-panel="currency" hidden>
+            <div class="feature-card">
+              <div class="feature-head">
+                <div>
+                  <h2>Live FX</h2>
+                  <p class="feature-sub" id="fxStatus">Syncing rates…</p>
+                </div>
+                <span class="live-dot" id="fxLiveDot" title="Live sync"></span>
+              </div>
+              <label class="field">
+                <span>Amount</span>
+                <input id="fxAmount" type="number" inputmode="decimal" value="100" min="0" step="any" />
+              </label>
+              <div class="pair-row">
+                <label class="field grow">
+                  <span>From</span>
+                  <select id="fxFrom"></select>
+                </label>
+                <button type="button" class="swap-btn" id="fxSwap" title="Swap currencies" aria-label="Swap">
+                  <svg viewBox="0 0 24 24"><path d="M7 7h11l-2.5-2.5M17 17H6l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <label class="field grow">
+                  <span>To</span>
+                  <select id="fxTo"></select>
+                </label>
+              </div>
+              <div class="feature-result">
+                <p class="feature-label" id="fxPairLabel">USD → EUR</p>
+                <p class="feature-value" id="fxResult">—</p>
+                <p class="feature-meta" id="fxRateMeta">Rate updates every few minutes</p>
+              </div>
+              <div class="chip-row" id="fxPopular"></div>
+            </div>
+          </div>
+
+          <!-- UNITS PANEL -->
+          <div class="panel" id="panel-units" data-panel="units" hidden>
+            <div class="feature-card">
+              <div class="feature-head">
+                <div>
+                  <h2>Units</h2>
+                  <p class="feature-sub">Length · mass · temp · data · more</p>
+                </div>
+              </div>
+              <label class="field">
+                <span>Category</span>
+                <select id="unitCategory"></select>
+              </label>
+              <label class="field">
+                <span>Value</span>
+                <input id="unitAmount" type="number" inputmode="decimal" value="1" step="any" />
+              </label>
+              <div class="pair-row">
+                <label class="field grow">
+                  <span>From</span>
+                  <select id="unitFrom"></select>
+                </label>
+                <button type="button" class="swap-btn" id="unitSwap" title="Swap units" aria-label="Swap units">
+                  <svg viewBox="0 0 24 24"><path d="M7 7h11l-2.5-2.5M17 17H6l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <label class="field grow">
+                  <span>To</span>
+                  <select id="unitTo"></select>
+                </label>
+              </div>
+              <div class="feature-result">
+                <p class="feature-label" id="unitPairLabel">m → ft</p>
+                <p class="feature-value" id="unitResult">—</p>
+                <p class="feature-meta" id="unitMeta">Exact SI-based conversion</p>
+              </div>
+              <div class="unit-table" id="unitTable"></div>
+            </div>
+          </div>
+
+          <!-- PROGRAMMER PANEL -->
+          <div class="panel" id="panel-programmer" data-panel="programmer" hidden>
+            <div class="feature-card">
+              <div class="feature-head">
+                <div>
+                  <h2>Programmer</h2>
+                  <p class="feature-sub">Bases · bitwise · masks</p>
+                </div>
+                <div class="seg" id="progBaseSeg">
+                  <button type="button" data-base="16" class="active">HEX</button>
+                  <button type="button" data-base="10">DEC</button>
+                  <button type="button" data-base="8">OCT</button>
+                  <button type="button" data-base="2">BIN</button>
+                </div>
+              </div>
+              <p class="prog-display" id="progDisplay">0</p>
+              <div class="base-readouts">
+                <button type="button" class="base-row" data-set-base="16"><span>HEX</span><code id="progHex">0</code></button>
+                <button type="button" class="base-row" data-set-base="10"><span>DEC</span><code id="progDec">0</code></button>
+                <button type="button" class="base-row" data-set-base="8"><span>OCT</span><code id="progOct">0</code></button>
+                <button type="button" class="base-row" data-set-base="2"><span>BIN</span><code id="progBin">0</code></button>
+              </div>
+              <div class="prog-keys" id="progKeys">
+                <button type="button" data-prog="and" class="fn">AND</button>
+                <button type="button" data-prog="or" class="fn">OR</button>
+                <button type="button" data-prog="xor" class="fn">XOR</button>
+                <button type="button" data-prog="not" class="fn">NOT</button>
+                <button type="button" data-prog="clear" class="warn">C</button>
+                <button type="button" data-prog="nand" class="fn">NAND</button>
+                <button type="button" data-prog="nor" class="fn">NOR</button>
+                <button type="button" data-prog="shl" class="fn">≪</button>
+                <button type="button" data-prog="shr" class="fn">≫</button>
+                <button type="button" data-prog="back" class="fn">⌫</button>
+                <button type="button" data-prog="digit" data-val="A" class="hex-only">A</button>
+                <button type="button" data-prog="digit" data-val="B" class="hex-only">B</button>
+                <button type="button" data-prog="digit" data-val="C" class="hex-only">C</button>
+                <button type="button" data-prog="digit" data-val="D" class="hex-only">D</button>
+                <button type="button" data-prog="digit" data-val="E" class="hex-only">E</button>
+                <button type="button" data-prog="digit" data-val="F" class="hex-only">F</button>
+                <button type="button" data-prog="digit" data-val="7">7</button>
+                <button type="button" data-prog="digit" data-val="8" class="oct-off">8</button>
+                <button type="button" data-prog="digit" data-val="9" class="oct-off">9</button>
+                <button type="button" data-prog="mod" class="fn">mod</button>
+                <button type="button" data-prog="digit" data-val="4">4</button>
+                <button type="button" data-prog="digit" data-val="5">5</button>
+                <button type="button" data-prog="digit" data-val="6">6</button>
+                <button type="button" data-prog="sub" class="op">−</button>
+                <button type="button" data-prog="add" class="op">+</button>
+                <button type="button" data-prog="digit" data-val="1">1</button>
+                <button type="button" data-prog="digit" data-val="2">2</button>
+                <button type="button" data-prog="digit" data-val="3">3</button>
+                <button type="button" data-prog="mul" class="op">×</button>
+                <button type="button" data-prog="div" class="op">÷</button>
+                <button type="button" data-prog="digit" data-val="0" class="span2">0</button>
+                <button type="button" data-prog="neg" class="fn">±</button>
+                <button type="button" data-prog="equals" class="eq span2">=</button>
+              </div>
+              <p class="feature-meta" id="progHint">32-bit two’s complement · tap a base row to switch</p>
+            </div>
+          </div>
+
+          <!-- AI PANEL -->
+          <div class="panel" id="panel-ai" data-panel="ai" hidden>
+            <div class="feature-card">
+              <div class="feature-head">
+                <div>
+                  <h2>AI Math</h2>
+                  <p class="feature-sub">Ask in plain English · local intelligence</p>
+                </div>
+              </div>
+              <label class="field">
+                <span>Ask Lumen</span>
+                <textarea id="aiInput" rows="3" placeholder="e.g. solve 2x + 5 = 17 · derivative of x^3 · 15% of 240 · quadratic x^2-5x+6=0"></textarea>
+              </label>
+              <div class="ai-actions">
+                <button type="button" class="eq ai-go" id="aiAskBtn">Think</button>
+                <button type="button" class="ghost" id="aiClearBtn">Clear</button>
+              </div>
+              <div class="chip-row" id="aiChips">
+                <button type="button" data-prompt="solve 2x + 5 = 17">Solve linear</button>
+                <button type="button" data-prompt="quadratic x^2 - 5x + 6 = 0">Quadratic</button>
+                <button type="button" data-prompt="derivative of 3x^4 - 2x + 7">Derivative</button>
+                <button type="button" data-prompt="integrate x^2">Integrate</button>
+                <button type="button" data-prompt="15% of 240">Percent</button>
+                <button type="button" data-prompt="gcd of 84 and 36">GCD</button>
+                <button type="button" data-prompt="prime factors of 360">Factors</button>
+                <button type="button" data-prompt="convert 72 F to C">Temp</button>
+              </div>
+              <div class="ai-out" id="aiOut">
+                <p class="feature-label">Answer</p>
+                <p class="feature-value" id="aiAnswer">Ask anything math-shaped</p>
+                <div class="ai-steps" id="aiSteps"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="history-panel" id="historyPanel" hidden>
+        <div class="history-head">
+          <h2>Recall</h2>
+          <button type="button" class="ghost" id="clearHistory">Clear</button>
+        </div>
+        <ul id="historyList"></ul>
+        <p class="history-empty" id="historyEmpty">Nothing yet. Equals saves a spark.</p>
+      </aside>
+    </main>
+
+    <p class="toast" id="toast" role="status"></p>
+
+    <script src="data.js?v=3"></script>
+    <script src="picker.js?v=5"></script>
+    <script src="currency.js?v=6"></script>
+    <script src="units.js?v=6"></script>
+    <script src="programmer.js?v=6"></script>
+    <script src="ai.js?v=6"></script>
+    <script src="app.js?v=6"></script>
+  </body>
+</html>
