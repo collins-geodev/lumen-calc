@@ -1,4 +1,4 @@
-const CACHE = "odogwu-v6";
+const CACHE = "odogwu-v7";
 const ASSETS = [
   "./",
   "./index.html",

@@ -941,13 +941,83 @@ window.LumenAI = (() => {
 
   const solveTrig = (raw) => {
     const flat = raw.replace(/\u00a0/g, " ");
-    // sin/cos/tan of angle in degrees
-    let m = flat.match(/\b(sin|cos|tan)\s*(?:of\s*)?(-?\d+(?:\.\d+)?)\s*(?:°|degrees?)?/i);
+
+    // Degree ↔ radian conversion
+    let m = flat.match(/convert\s+(-?\d+(?:\.\d+)?)\s*(?:°|degrees?)\s+to\s+rad/i);
+    if (m) {
+      const deg = Number(m[1]);
+      const rad = (deg * Math.PI) / 180;
+      return {
+        answer: `${formatQty(rad)} rad`,
+        steps: [`radians = degrees × π/180`, `${deg}° = ${formatQty(rad)} rad`],
+      };
+    }
+    m = flat.match(/convert\s+(-?\d+(?:\.\d+)?)\s*(?:rad(?:ians?)?)\s+to\s+deg/i);
+    if (m) {
+      const rad = Number(m[1]);
+      const deg = (rad * 180) / Math.PI;
+      return {
+        answer: `${formatQty(deg)}°`,
+        steps: [`degrees = radians × 180/π`, `${rad} rad = ${formatQty(deg)}°`],
+      };
+    }
+
+    // Law of cosines: c² = a²+b²−2ab cosC
+    m = flat.match(
+      /law\s+of\s+cosines.*?a\s*=\s*(-?\d+(?:\.\d+)?).*?b\s*=\s*(-?\d+(?:\.\d+)?).*?(?:angle\s*[Cc]|C)\s*=\s*(-?\d+(?:\.\d+)?)/i
+    );
+    if (m) {
+      const a = Number(m[1]);
+      const b = Number(m[2]);
+      const C = Number(m[3]);
+      const c = Math.sqrt(a * a + b * b - 2 * a * b * Math.cos((C * Math.PI) / 180));
+      return {
+        answer: formatQty(c),
+        steps: [
+          `c² = a² + b² − 2ab cos(C)`,
+          `c = √(${a}² + ${b}² − 2·${a}·${b}·cos(${C}°)) = ${formatQty(c)}`,
+        ],
+      };
+    }
+
+    // Law of sines: a/sinA = b/sinB
+    m = flat.match(
+      /law\s+of\s+sines.*?a\s*=\s*(-?\d+(?:\.\d+)?).*?A\s*=\s*(-?\d+(?:\.\d+)?).*?B\s*=\s*(-?\d+(?:\.\d+)?)/i
+    );
+    if (m) {
+      const a = Number(m[1]);
+      const A = Number(m[2]);
+      const B = Number(m[3]);
+      const b = (a * Math.sin((B * Math.PI) / 180)) / Math.sin((A * Math.PI) / 180);
+      return {
+        answer: formatQty(b),
+        steps: [
+          `a/sin(A) = b/sin(B)`,
+          `b = a · sin(B)/sin(A) = ${formatQty(b)}`,
+        ],
+      };
+    }
+
+    // sin/cos/tan/cot/sec/csc of angle in degrees
+    m = flat.match(
+      /\b(sin|cos|tan|cot|sec|csc)\s*(?:of\s*)?(-?\d+(?:\.\d+)?)\s*(?:°|degrees?)?/i
+    );
     if (m && !/[xy=]/i.test(flat.split(m[0])[0]?.slice(-5) || "")) {
       const fn = m[1].toLowerCase();
       const deg = parseLooseNumber(m[2]);
       const rad = (deg * Math.PI) / 180;
-      const v = fn === "sin" ? Math.sin(rad) : fn === "cos" ? Math.cos(rad) : Math.tan(rad);
+      const s = Math.sin(rad);
+      const c = Math.cos(rad);
+      const t = Math.tan(rad);
+      const map = {
+        sin: s,
+        cos: c,
+        tan: t,
+        cot: 1 / t,
+        sec: 1 / c,
+        csc: 1 / s,
+      };
+      const v = map[fn];
       return {
         answer: formatQty(Math.round(v * 1e10) / 1e10),
         steps: [`${fn}(${formatQty(deg)}°) in degrees`, `= ${formatQty(v)}`],
@@ -1357,11 +1427,145 @@ window.LumenAI = (() => {
     return null;
   };
 
+  const nCr = (n, r) => {
+    if (r < 0 || n < 0 || r > n) return 0;
+    let c = 1;
+    for (let i = 1; i <= r; i++) c = (c * (n - r + i)) / i;
+    return c;
+  };
+
   const solveProbability = (raw) => {
     const flat = raw.replace(/\u00a0/g, " ");
+
+    // Binomial: P(X=k) for n trials, success p
     let m = flat.match(
-      /probability.*?(?:rolling|roll).*?(\d+).*?(?:die|dice)/i
+      /binomial.*?(?:n\s*=\s*)?(\d+).*?(?:k\s*=\s*|x\s*=\s*|exactly\s*)(\d+).*?(?:p\s*=\s*)?(-?\d+(?:\.\d+)?)/i
     );
+    if (!m) {
+      m = flat.match(
+        /probability\s+of\s+(?:exactly\s+)?(\d+)\s+success(?:es)?\s+in\s+(\d+)\s+trials?\s+(?:with\s+)?p\s*=\s*(-?\d+(?:\.\d+)?)/i
+      );
+    }
+    if (m) {
+      let n;
+      let k;
+      let p;
+      if (/binomial/i.test(flat) && /n\s*=/i.test(flat)) {
+        n = Number(m[1]);
+        k = Number(m[2]);
+        p = Number(m[3]);
+      } else if (/success/i.test(flat)) {
+        k = Number(m[1]);
+        n = Number(m[2]);
+        p = Number(m[3]);
+      } else {
+        n = Number(m[1]);
+        k = Number(m[2]);
+        p = Number(m[3]);
+      }
+      if (p > 1) p = p / 100;
+      const prob = nCr(n, k) * p ** k * (1 - p) ** (n - k);
+      return {
+        answer: formatQty(prob),
+        steps: [
+          `Binomial: P(X=k) = C(n,k) p^k (1−p)^(n−k)`,
+          `n=${n}, k=${k}, p=${formatQty(p)}`,
+          `P(X=${k}) = ${formatQty(prob)}`,
+        ],
+      };
+    }
+
+    // Independent: P(A and B) = P(A)P(B)
+    m = flat.match(
+      /(?:independent|P\s*\(\s*A\s*(?:and|&)\s*B\s*\)).*?(-?\d+(?:\.\d+)?)\s*(?:and|,)\s*(-?\d+(?:\.\d+)?)/i
+    ) ||
+      flat.match(
+        /P\s*\(\s*A\s*\)\s*=\s*(-?\d+(?:\.\d+)?).*?P\s*\(\s*B\s*\)\s*=\s*(-?\d+(?:\.\d+)?).*?(?:and|both|independent)/i
+      );
+    if (m) {
+      let a = Number(m[1]);
+      let b = Number(m[2]);
+      if (a > 1) a /= 100;
+      if (b > 1) b /= 100;
+      return {
+        answer: formatQty(a * b),
+        steps: [
+          `Independent events: P(A∩B) = P(A)·P(B)`,
+          `${formatQty(a)} × ${formatQty(b)} = ${formatQty(a * b)}`,
+        ],
+      };
+    }
+
+    // Conditional: P(A|B) = P(A and B) / P(B)
+    m = flat.match(
+      /P\s*\(\s*A\s*\|\s*B\s*\).*?P\s*\(\s*A\s*(?:and|&)\s*B\s*\)\s*=\s*(-?\d+(?:\.\d+)?).*?P\s*\(\s*B\s*\)\s*=\s*(-?\d+(?:\.\d+)?)/i
+    ) ||
+      flat.match(
+        /conditional.*?(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)/i
+      );
+    if (m) {
+      let num = Number(m[1]);
+      let den = Number(m[2]);
+      if (num > 1) num /= 100;
+      if (den > 1) den /= 100;
+      if (!den) return null;
+      return {
+        answer: formatQty(num / den),
+        steps: [
+          `P(A|B) = P(A∩B) / P(B)`,
+          `${formatQty(num)} / ${formatQty(den)} = ${formatQty(num / den)}`,
+        ],
+      };
+    }
+
+    // Coin flips
+    if (/coin/i.test(flat) && /probability|chance/i.test(flat)) {
+      const nFlip = flat.match(/(\d+)\s*(?:times|flips?|coins?)/i);
+      if (/heads\s+and\s+tails|one\s+head.*one\s+tail/i.test(flat) && nFlip && Number(nFlip[1]) === 2) {
+        return {
+          answer: "1/2",
+          steps: ["Two fair coins: HT, TH out of HH,HT,TH,TT", "P = 2/4 = 1/2"],
+        };
+      }
+      if (/heads|tails/i.test(flat)) {
+        const n = nFlip ? Number(nFlip[1]) : 1;
+        if (/all\s+heads|n heads/i.test(flat) || (n > 1 && /heads/i.test(flat) && /all|every/i.test(flat))) {
+          const p = 0.5 ** n;
+          return {
+            answer: formatQty(p),
+            steps: [`Fair coin, ${n} flips all heads`, `P = (1/2)^${n} = ${formatQty(p)}`],
+          };
+        }
+        return {
+          answer: "1/2",
+          steps: ["Fair coin: P(heads) = P(tails) = 1/2"],
+        };
+      }
+    }
+
+    // Cards
+    if (/card|deck/i.test(flat) && /probability|chance/i.test(flat)) {
+      if (/ace/i.test(flat)) {
+        return {
+          answer: "1/13",
+          steps: ["Standard deck: 4 aces / 52 cards = 1/13"],
+        };
+      }
+      if (/heart|diamond|club|spade/i.test(flat)) {
+        return {
+          answer: "1/4",
+          steps: ["13 cards per suit / 52 = 1/4"],
+        };
+      }
+      if (/face\s*card|king|queen|jack/i.test(flat)) {
+        return {
+          answer: "3/13",
+          steps: ["12 face cards / 52 = 3/13"],
+        };
+      }
+    }
+
+    m = flat.match(/probability.*?(?:rolling|roll).*?(\d+).*?(?:die|dice)/i);
     if (m || (/die|dice/i.test(flat) && /probability|chance/i.test(flat))) {
       const face = flat.match(/(?:rolling|roll(?:ing)?|getting|get)\s*(?:a\s*)?(\d+)/i);
       if (face) {
@@ -1376,7 +1580,19 @@ window.LumenAI = (() => {
       if (/even/i.test(flat)) {
         return { answer: "1/2", steps: ["Even faces: 2,4,6 → 3/6 = 1/2"] };
       }
+      if (/odd/i.test(flat)) {
+        return { answer: "1/2", steps: ["Odd faces: 1,3,5 → 3/6 = 1/2"] };
+      }
+      if (/greater\s+than\s+(\d+)/i.test(flat)) {
+        const g = Number(flat.match(/greater\s+than\s+(\d+)/i)[1]);
+        const fav = [1, 2, 3, 4, 5, 6].filter((x) => x > g).length;
+        return {
+          answer: `${fav}/6`,
+          steps: [`Faces > ${g}: ${fav} outcomes`, `P = ${fav}/6`],
+        };
+      }
     }
+
     m = flat.match(/P\s*\(\s*(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)\s*\)/i);
     if (m) {
       const a = Number(m[1]);
@@ -1437,6 +1653,211 @@ window.LumenAI = (() => {
     };
   };
 
+  const evalPolyAt = (c, x) =>
+    Object.keys(c).reduce((s, p) => s + c[p] * x ** Number(p), 0);
+
+  const solveLimit = (raw) => {
+    const m = raw.match(
+      /(?:limit|lim)\s*(?:as\s*)?x\s*→\s*(-?\d+(?:\.\d+)?|infinity|∞)\s*(?:of\s*)?(.+)/i
+    ) ||
+      raw.match(/limit\s+of\s+(.+?)\s+as\s+x\s*(?:approaches|→|->)\s*(-?\d+(?:\.\d+)?|infinity|∞)/i);
+    if (!m) return null;
+    let expr;
+    let at;
+    if (/limit\s+of/i.test(raw)) {
+      expr = m[1];
+      at = m[2];
+    } else {
+      at = m[1];
+      expr = m[2];
+    }
+    expr = expr.replace(/\$/g, "").trim();
+    if (/infinity|∞/i.test(String(at))) {
+      const coeffs = parsePoly(expr);
+      const powers = Object.keys(coeffs)
+        .map(Number)
+        .filter((p) => coeffs[p]);
+      if (!powers.length) return null;
+      const deg = Math.max(...powers);
+      const lead = coeffs[deg];
+      if (deg > 0) {
+        return {
+          answer: lead > 0 ? "∞" : "−∞",
+          steps: [
+            `Leading term ${formatQty(lead)}x^${deg} dominates as x→∞`,
+            `limit = ${lead > 0 ? "∞" : "−∞"}`,
+          ],
+        };
+      }
+      return {
+        answer: formatQty(lead),
+        steps: [`Constant polynomial → limit ${formatQty(lead)}`],
+      };
+    }
+    const x0 = Number(at);
+    const coeffs = parsePoly(expr);
+    if (Object.keys(coeffs).length) {
+      const v = evalPolyAt(coeffs, x0);
+      return {
+        answer: formatQty(v),
+        steps: [
+          `Polynomials are continuous`,
+          `lim(x→${x0}) = f(${x0}) = ${formatQty(v)}`,
+        ],
+      };
+    }
+    const v = evalMath(expr.replace(/x/gi, `(${x0})`));
+    if (v !== null) {
+      return {
+        answer: formatQty(v),
+        steps: [`Substitute x = ${x0}`, `limit = ${formatQty(v)}`],
+      };
+    }
+    return null;
+  };
+
+  const solveCriticalPoints = (raw) => {
+    const m = raw.match(
+      /(?:critical\s*points?|stationary\s*points?|find\s+extrema|max(?:imum)?\s+and\s+min(?:imum)?)\s*(?:of\s*)?(.+)/i
+    );
+    if (!m) return null;
+    const coeffs = parsePoly(m[1]);
+    const d = derivative(coeffs);
+    // Solve f'=0 for linear or quadratic derivative
+    const a = d[2] || 0;
+    const b = d[1] || 0;
+    const c = d[0] || 0;
+    const roots = [];
+    if (Math.abs(a) > 1e-12) {
+      const disc = b * b - 4 * a * c;
+      if (disc >= 0) {
+        roots.push((-b + Math.sqrt(disc)) / (2 * a));
+        roots.push((-b - Math.sqrt(disc)) / (2 * a));
+      }
+    } else if (Math.abs(b) > 1e-12) {
+      roots.push(-c / b);
+    }
+    if (!roots.length) {
+      return {
+        answer: "No critical points",
+        steps: [`f'(x) = ${polyToString(d)}`, "f'(x) = 0 has no real root"],
+      };
+    }
+    const uniq = [...new Set(roots.map((r) => formatQty(r)))];
+    const d2 = derivative(d);
+    const classified = uniq.map((xs) => {
+      const x = Number(xs);
+      const curv = evalPolyAt(d2, x);
+      const kind = curv > 0 ? "local min" : curv < 0 ? "local max" : "inflection/test inconclusive";
+      const y = evalPolyAt(coeffs, x);
+      return `x=${xs} (${kind}), f=${formatQty(y)}`;
+    });
+    return {
+      answer: classified.join("; "),
+      steps: [
+        `f(x) = ${polyToString(coeffs)}`,
+        `f'(x) = ${polyToString(d)} = 0`,
+        `Critical x: ${uniq.join(", ")}`,
+        ...classified,
+      ],
+    };
+  };
+
+  const looksLikeGeneralKnowledge = (q) => {
+    if (
+      /[\d]+\s*[+\-*/^=]|derivative|integral|solve\s+\d|quadratic|sin\s*\d|cos\s*\d|log\s|nCr|probability of|km\/h|₦|naira|%|x\^/i.test(
+        q
+      )
+    ) {
+      return false;
+    }
+    return /^(who|what|where|when|why|how|explain|define|describe|tell me|capital of|president|history|science|biology|chemistry|physics|geography|literature|which)\b/i.test(
+      q
+    ) || /\b(who is|what is|what are|where is|capital of|meaning of|definition of)\b/i.test(q);
+  };
+
+  const answerGeneralSubject = async (q) => {
+    const topic = q
+      .replace(
+        /^(please\s+)?(can you\s+)?(tell me\s+)?(about\s+|explain\s+|define\s+|describe\s+|what is\s+|what are\s+|who is\s+|who was\s+|where is\s+|when was\s+|why is\s+|how does\s+|how do\s+)?/i,
+        ""
+      )
+      .replace(/^(the|a|an)\s+/i, "")
+      .replace(/\?+$/g, "")
+      .trim();
+    if (topic.length < 2) return null;
+
+    const wikiHeaders = {
+      Accept: "application/json",
+      "Api-User-Agent": "OdogwuCalc/1.0 (https://github.com/collins-geodev/lumen-calc; educational calculator)",
+    };
+
+    try {
+      const searchUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(
+        topic
+      )}&limit=1&namespace=0&format=json&origin=*`;
+      const search = await fetch(searchUrl, { headers: wikiHeaders }).then((r) => r.json());
+      const title = search?.[1]?.[0];
+      const pageUrl = search?.[3]?.[0];
+
+      if (title) {
+        const sumRes = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, "_"))}`,
+          { headers: wikiHeaders }
+        );
+        if (sumRes.ok) {
+          const sum = await sumRes.json();
+          if (sum?.extract) {
+            return {
+              answer: sum.extract,
+              steps: [
+                `Subject: ${sum.title}${sum.description ? ` — ${sum.description}` : ""}`,
+                "General knowledge answer (Wikipedia)",
+                sum.content_urls?.desktop?.page || pageUrl
+                  ? `Source: ${sum.content_urls?.desktop?.page || pageUrl}`
+                  : "Source: Wikipedia",
+              ],
+            };
+          }
+        }
+        // Fallback: plain extract via action=query
+        const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&titles=${encodeURIComponent(
+          title
+        )}&format=json&origin=*`;
+        const extractData = await fetch(extractUrl, { headers: wikiHeaders }).then((r) => r.json());
+        const pages = extractData?.query?.pages || {};
+        const page = Object.values(pages)[0];
+        if (page?.extract) {
+          return {
+            answer: page.extract,
+            steps: [
+              `Subject: ${page.title}`,
+              "General knowledge answer (Wikipedia)",
+              pageUrl ? `Source: ${pageUrl}` : "Source: Wikipedia",
+            ],
+          };
+        }
+      }
+
+      const ddg = await fetch(
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(q)}&format=json&no_redirect=1&no_html=1`
+      ).then((r) => r.json());
+      const text = ddg.AbstractText || ddg.Answer || "";
+      if (text) {
+        return {
+          answer: text,
+          steps: [
+            `General knowledge: ${ddg.Heading || topic}`,
+            ddg.AbstractURL ? `Source: ${ddg.AbstractURL}` : "Source: DuckDuckGo",
+          ],
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
   const normalizeQuestion = (raw) =>
     raw
       .replace(/\u00a0/g, " ")
@@ -1444,10 +1865,10 @@ window.LumenAI = (() => {
       .replace(/\s+/g, " ")
       .trim();
 
-  const think = (raw) => {
+  const thinkMath = (raw) => {
     const q = normalizeQuestion(raw);
     if (!q) {
-      return { answer: "Ask a math question first", steps: [] };
+      return { answer: "Ask a question first", steps: [] };
     }
 
     const temp = window.LumenUnits?.answerTempPrompt?.(q);
@@ -1472,6 +1893,8 @@ window.LumenAI = (() => {
       solveCombinatorics,
       solveStats,
       solveProbability,
+      solveLimit,
+      solveCriticalPoints,
       solveSecondDerivative,
       solveDefiniteIntegral,
     ];
@@ -1567,14 +1990,31 @@ window.LumenAI = (() => {
       return { answer: String(direct), steps: ["Parsed as math expression", `= ${direct}`] };
     }
 
+    return null;
+  };
+
+  const think = async (raw) => {
+    const q = normalizeQuestion(raw);
+    if (!q) {
+      return { answer: "Ask a question first", steps: [] };
+    }
+
+    const math = thinkMath(q);
+    if (math) return math;
+
+    if (looksLikeGeneralKnowledge(q) || q.split(/\s+/).length >= 3) {
+      const general = await answerGeneralSubject(q);
+      if (general) return general;
+    }
+
     return {
-      answer: "I couldn't parse that yet",
+      answer: "I couldn't answer that yet",
       steps: [
-        "Everyday: discount, budget, fuel, travel time, recipes, simple/compound interest",
-        "Advanced: solve 2x+3y=7; x−y=1 · AP/GP · mean of 2,5,8,11",
-        "Calc: derivative / integrate x^2 from 0 to 3 · second derivative of x^4",
-        "More: sin 30 · log base 2 of 8 · 10 C 3 · area of circle radius 7",
-        "Also: 2^x = 32 · Pythagoras legs 3 and 4 · work-rate together times",
+        "Math: probability, calculus, trig, algebra, geometry, finance word problems",
+        "Examples: binomial n=10 k=3 p=0.5 · limit as x→2 of x^2+1 · cot 45",
+        "Critical points of x^3-3x · law of cosines a=5 b=7 C=60",
+        "General subjects: Who is Chinua Achebe? · What is photosynthesis?",
+        "Capital of Nigeria? · Explain gravity",
       ],
     };
   };
@@ -1587,18 +2027,36 @@ window.LumenAI = (() => {
       .join("");
   };
 
-  const ask = () => {
+  const ask = async () => {
     const q = document.getElementById("aiInput").value;
-    const result = think(q);
-    render(result);
-    window.LumenUI?.toast?.("Thought complete");
+    const btn = document.getElementById("aiAskBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Thinking…";
+    }
+    try {
+      render({ answer: "Thinking…", steps: ["Working through your question"] });
+      const result = await think(q);
+      render(result);
+      window.LumenUI?.toast?.("Thought complete");
+    } catch {
+      render({
+        answer: "Something went wrong while thinking",
+        steps: ["Check your connection for general-knowledge questions, then try again"],
+      });
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Think";
+      }
+    }
   };
 
   const init = () => {
     document.getElementById("aiAskBtn").addEventListener("click", ask);
     document.getElementById("aiClearBtn").addEventListener("click", () => {
       document.getElementById("aiInput").value = "";
-      render({ answer: "Ask anything math-shaped", steps: [] });
+      render({ answer: "Ask math or any general subject question", steps: [] });
     });
     document.getElementById("aiChips").addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-prompt]");

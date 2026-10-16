@@ -308,13 +308,13 @@
             <div class="feature-card">
               <div class="feature-head">
                 <div>
-                  <h2>AI Math</h2>
-                  <p class="feature-sub">Ask in plain English · local intelligence</p>
+                  <h2>Odogwu AI</h2>
+                  <p class="feature-sub">Math · science · general knowledge · step-by-step</p>
                 </div>
               </div>
               <label class="field">
                 <span>Ask Odogwu</span>
-                <textarea id="aiInput" rows="3" placeholder="e.g. solve 2x + 5 = 17 · derivative of x^3 · 15% of 240 · quadratic x^2-5x+6=0"></textarea>
+                <textarea id="aiInput" rows="3" placeholder="e.g. sin 30 · integrate x^2 from 0 to 3 · probability of rolling a 6 · What is photosynthesis?"></textarea>
               </label>
               <div class="ai-actions">
                 <button type="button" class="eq ai-go" id="aiAskBtn">Think</button>
@@ -335,16 +335,25 @@
                 <button type="button" data-prompt="mean of 2, 5, 8, 11, 14">Mean</button>
                 <button type="button" data-prompt="10 choose 3">nCr</button>
                 <button type="button" data-prompt="sin 30">Trig</button>
+                <button type="button" data-prompt="cot 45">Cot</button>
+                <button type="button" data-prompt="law of cosines a=5 b=7 C=60">Law of cosines</button>
+                <button type="button" data-prompt="convert 180 degrees to radians">Deg→rad</button>
+                <button type="button" data-prompt="probability of rolling a 6 on a die">Probability</button>
+                <button type="button" data-prompt="binomial n=10 k=3 p=0.5">Binomial</button>
+                <button type="button" data-prompt="limit as x→2 of x^2+1">Limit</button>
+                <button type="button" data-prompt="critical points of x^3 - 3x">Critical pts</button>
                 <button type="button" data-prompt="log base 2 of 8">Log</button>
                 <button type="button" data-prompt="area of a circle with radius 7">Circle</button>
                 <button type="button" data-prompt="Pythagoras legs 3 and 4 find hypotenuse">Pythagoras</button>
-                <button type="button" data-prompt="A can finish a job in 6 hours and B in 3 hours. How long together?">Work rate</button>
+                <button type="button" data-prompt="What is photosynthesis?">Science</button>
+                <button type="button" data-prompt="Who is Chinua Achebe?">Literature</button>
+                <button type="button" data-prompt="What is the capital of Nigeria?">Geography</button>
                 <button type="button" data-prompt="I bought fuel for 15,000 naira at 1,370 naira per liter. How many liters can I get?">Fuel</button>
                 <button type="button" data-prompt="convert 72 F to C">Temp</button>
               </div>
               <div class="ai-out" id="aiOut">
                 <p class="feature-label">Answer</p>
-                <p class="feature-value" id="aiAnswer">Ask anything math-shaped</p>
+                <p class="feature-value" id="aiAnswer">Ask math or any general subject question</p>
                 <div class="ai-steps" id="aiSteps"></div>
               </div>
             </div>
@@ -369,7 +378,7 @@
     <script src="currency.js?v=6"></script>
     <script src="units.js?v=6"></script>
     <script src="programmer.js?v=6"></script>
-    <script src="ai.js?v=9"></script>
+    <script src="ai.js?v=10"></script>
     <script src="app.js?v=7"></script>
     <script>
       if ("serviceWorker" in navigator) {
