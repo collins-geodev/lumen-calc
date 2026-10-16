@@ -1,6 +1,6 @@
-# Lumen — Smart Omni Calculator
+# Odogwu-Calc
 
-A dark, glassmorphic calculator with scientific tools, live FX, units conversion, programmer mode, and local AI math assist.
+A dark, glassmorphic calculator with scientific tools, live FX, units conversion, programmer mode, and local AI math assist. Built by Collins Anyanwu.
 
 **Live app:** [https://lumen-calc-iota.vercel.app](https://lumen-calc-iota.vercel.app)  
 **GitHub:** [collins-geodev/lumen-calc](https://github.com/collins-geodev/lumen-calc)
@@ -55,6 +55,28 @@ npx vercel --prod
 | `ai.js` | Local AI math assist |
 | `picker.js` | Searchable dark dropdowns |
 | `data.js` | Currencies and unit tables |
+
+## Android APK
+
+An installable debug APK is built with Capacitor:
+
+```bash
+npm install
+npm run apk
+npm run apk:copy
+```
+
+The file lands at `dist/odogwu-calc.apk`.
+
+**Install on your phone**
+
+1. Copy `dist/odogwu-calc.apk` to your phone (USB, Drive, email, etc.).
+2. On Android: Settings → Security (or Apps) → allow **Install unknown apps** for the app you use to open the file (Files, Chrome, Drive).
+3. Open the APK and tap **Install**.
+
+Notes:
+- This is a debug build (fine for personal use; not Play Store release-signed).
+- Builds need **JDK 21** and an Android SDK. If `java -version` shows 25+, set `JAVA_HOME` to a JDK 21 install before `npm run apk`.
 
 ## License
 

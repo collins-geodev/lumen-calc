@@ -2,15 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Lumen — Smart Omni Calculator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#05060c" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Odogwu-Calc — Built by Collins Anyanwu</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=5" />
+    <link rel="stylesheet" href="styles.css?v=7" />
   </head>
   <body>
     <div class="orb orb-a" aria-hidden="true"></div>
@@ -22,9 +29,9 @@
         <div class="shine-ring" aria-hidden="true"></div>
         <div class="calc">
           <header class="brand">
-            <div>
-              <p class="mark">Lumen</p>
-              <p class="tag" id="tagline">smart · scientific · shine</p>
+            <div class="brand-copy">
+              <p class="mark brand-pulse">Odogwu-Calc</p>
+              <p class="credit brand-pulse">Built by Collins Anyanwu</p>
             </div>
             <div class="brand-actions" id="panelActions">
               <button type="button" class="ghost active panel-only calc" id="modeBtn" title="Toggle scientific pad">
@@ -302,7 +309,7 @@
                 </div>
               </div>
               <label class="field">
-                <span>Ask Lumen</span>
+                <span>Ask Odogwu</span>
                 <textarea id="aiInput" rows="3" placeholder="e.g. solve 2x + 5 = 17 · derivative of x^3 · 15% of 240 · quadratic x^2-5x+6=0"></textarea>
               </label>
               <div class="ai-actions">
@@ -310,13 +317,14 @@
                 <button type="button" class="ghost" id="aiClearBtn">Clear</button>
               </div>
               <div class="chip-row" id="aiChips">
+                <button type="button" data-prompt="A pair of shoes costs ₦25,000. A shop offers a 20% discount. How much will you pay after the discount?">Discount</button>
+                <button type="button" data-prompt="You receive a monthly salary of ₦180,000. You spend ₦45,000 on food, ₦30,000 on transportation, ₦50,000 on rent, and ₦15,000 on other expenses. How much money will you have left?">Budget</button>
+                <button type="button" data-prompt="A driver covers a distance of 120 km at an average speed of 60 km/h. How long will the journey take?">Travel time</button>
+                <button type="button" data-prompt="A recipe requires 3 cups of rice for 6 people. How many cups of rice will you need for 10 people?">Recipe</button>
+                <button type="button" data-prompt="You deposit ₦100,000 into a savings account that pays 8% simple interest per year. How much money will you have after 3 years?">Interest</button>
+                <button type="button" data-prompt="I bought fuel for 15,000 naira at 1,370 naira per liter. How many liters can I get?">Fuel liters</button>
                 <button type="button" data-prompt="solve 2x + 5 = 17">Solve linear</button>
-                <button type="button" data-prompt="quadratic x^2 - 5x + 6 = 0">Quadratic</button>
-                <button type="button" data-prompt="derivative of 3x^4 - 2x + 7">Derivative</button>
-                <button type="button" data-prompt="integrate x^2">Integrate</button>
                 <button type="button" data-prompt="15% of 240">Percent</button>
-                <button type="button" data-prompt="gcd of 84 and 36">GCD</button>
-                <button type="button" data-prompt="prime factors of 360">Factors</button>
                 <button type="button" data-prompt="convert 72 F to C">Temp</button>
               </div>
               <div class="ai-out" id="aiOut">
@@ -346,7 +354,14 @@
     <script src="currency.js?v=6"></script>
     <script src="units.js?v=6"></script>
     <script src="programmer.js?v=6"></script>
-    <script src="ai.js?v=6"></script>
-    <script src="app.js?v=6"></script>
+    <script src="ai.js?v=8"></script>
+    <script src="app.js?v=7"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("./sw.js").catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

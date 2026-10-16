@@ -1,0 +1,11 @@
+{
+  "appId": "com.collinsgeodev.lumen",
+  "appName": "Odogwu-Calc",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

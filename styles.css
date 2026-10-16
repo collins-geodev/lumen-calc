@@ -148,15 +148,56 @@ body {
   flex-wrap: wrap;
 }
 
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
 .mark {
   font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-size: 14px;
   background: linear-gradient(90deg, var(--cyan), var(--violet), var(--gold));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  transform-origin: left center;
+}
+
+.credit {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transform-origin: left center;
+}
+
+.brand-pulse {
+  animation: brandZoom 2.4s ease-in-out infinite;
+  will-change: transform;
+}
+
+.credit.brand-pulse {
+  animation-delay: 0.35s;
+}
+
+@keyframes brandZoom {
+  0%,
+  100% {
+    transform: scale(0.92);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-pulse {
+    animation: none;
+  }
 }
 
 .tag {

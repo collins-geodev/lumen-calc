@@ -419,14 +419,6 @@
   window.LumenUI = { toast };
 
   let activePanel = "calc";
-  const tagline = document.getElementById("tagline");
-  const TAGS = {
-    calc: "smart · scientific · shine",
-    currency: "live fx · 150+ currencies",
-    units: "precise · multi-category units",
-    programmer: "hex · bitwise · bases",
-    ai: "ask · explain · advanced math",
-  };
 
   const setPanel = (name) => {
     activePanel = name;
@@ -441,7 +433,6 @@
       panel.classList.toggle("active", on);
       panel.hidden = !on;
     });
-    if (tagline) tagline.textContent = TAGS[name] || TAGS.calc;
     if (name === "currency") window.LumenFX?.convert?.();
     if (name === "units") window.LumenUnits?.convert?.();
   };

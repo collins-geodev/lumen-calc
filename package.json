@@ -1,0 +1,19 @@
+{
+  "name": "lumen-calc",
+  "version": "1.0.0",
+  "description": "Odogwu-Calc — smart dark omni calculator by Collins Anyanwu",
+  "private": true,
+  "scripts": {
+    "sync:www": "node scripts/sync-www.js",
+    "cap:sync": "npm run sync:www && npx cap sync android",
+    "apk": "powershell -ExecutionPolicy Bypass -File scripts/build-apk.ps1",
+    "apk:copy": "node scripts/copy-apk.js"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.3"
+  }
+}
