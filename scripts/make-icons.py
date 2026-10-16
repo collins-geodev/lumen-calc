@@ -1,17 +1,29 @@
+"""Generate PWA + Android launcher icons from icons/source-logo.*"""
 from PIL import Image, ImageDraw
+import glob
 import os
 
-src = r"C:\Users\colli\.cursor\projects\c-Users-colli-lumen-calc\assets\odogwu-calc-logo-1024.jpg"
-root = r"C:\Users\colli\lumen-calc"
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 icons = os.path.join(root, "icons")
 os.makedirs(icons, exist_ok=True)
 
+candidates = (
+    glob.glob(os.path.join(icons, "source-logo.*"))
+    + glob.glob(os.path.join(icons, "odogwu-calc-logo.png"))
+)
+if not candidates:
+    raise SystemExit("No source logo found in icons/")
+
+src = candidates[0]
 img = Image.open(src).convert("RGBA")
 w, h = img.size
 side = min(w, h)
 left = (w - side) // 2
 top = (h - side) // 2
 img = img.crop((left, top, left + side, top + side))
+
+# App chrome behind portrait (matches photo's white studio look)
+BG = (255, 255, 255, 255)
 
 
 def save_png(im, path, size):
@@ -29,7 +41,7 @@ def rounded(im, size, radius_ratio=0.22):
     draw = ImageDraw.Draw(mask)
     r = int(size * radius_ratio)
     draw.rounded_rectangle((0, 0, size, size), radius=r, fill=255)
-    out = Image.new("RGBA", (size, size), (5, 6, 12, 255))
+    out = Image.new("RGBA", (size, size), BG)
     out.paste(base, (0, 0), mask)
     return out
 
@@ -59,11 +71,12 @@ for folder, size in densities.items():
 
 for folder, size in fg.items():
     d = os.path.join(res, folder)
-    canvas = Image.new("RGBA", (size, size), (5, 6, 12, 255))
-    content = int(size * 0.72)
+    # Fill most of the adaptive safe zone so the face reads clearly
+    canvas = Image.new("RGBA", (size, size), BG)
+    content = int(size * 0.86)
     logo = img.resize((content, content), Image.Resampling.LANCZOS)
     off = (size - content) // 2
     canvas.paste(logo, (off, off), logo)
     canvas.save(os.path.join(d, "ic_launcher_foreground.png"), "PNG")
 
-print("icons written")
+print(f"icons written from {src}")
