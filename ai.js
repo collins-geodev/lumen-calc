@@ -47,6 +47,58 @@ window.LumenAI = (() => {
     }
   };
 
+  /** Safe math evaluator: trig, logs, roots, factorial, constants. */
+  const evalMath = (expr) => {
+    if (!expr || typeof expr !== "string") return null;
+    let s = expr
+      .trim()
+      .replace(/×/g, "*")
+      .replace(/÷/g, "/")
+      .replace(/−/g, "-")
+      .replace(/π|pi/gi, "PI")
+      .replace(/\be\b/g, "E")
+      .replace(/\^/g, "**")
+      .replace(/√\s*\(/g, "sqrt(")
+      .replace(/√\s*(-?\d+(?:\.\d+)?)/g, "sqrt($1)")
+      .replace(/(\d+(?:\.\d+)?)\s*!/g, "factorial($1)")
+      .replace(/\bln\s*\(/gi, "log(")
+      .replace(/\blog10\s*\(/gi, "log10(");
+    // sin30 → sin(30) when followed by number
+    s = s.replace(
+      /\b(sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|sqrt|abs|floor|ceil|round|exp|log|log10|log2)\s*(-?\d+(?:\.\d+)?)/gi,
+      "$1($2)"
+    );
+    const probe = s
+      .replace(
+        /\b(sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|sqrt|abs|floor|ceil|round|exp|log|log10|log2|factorial|sind|cosd|tand|PI|E|Math)\b/gi,
+        ""
+      )
+      .replace(/[0-9+\-*/().,%\s_]/g, "");
+    if (probe.length) return null;
+    try {
+      // eslint-disable-next-line no-new-func
+      const v = Function(
+        `"use strict";
+        const {sin,cos,tan,asin,acos,atan,sinh,cosh,tanh,sqrt,abs,floor,ceil,round,exp,log,log10,log2,PI,E} = Math;
+        const factorial = (n) => {
+          n = Math.trunc(n);
+          if (n < 0 || n > 170) return NaN;
+          let r = 1;
+          for (let i = 2; i <= n; i++) r *= i;
+          return r;
+        };
+        // degrees for trig of bare numbers often expected — use radians; wrap deg helpers
+        const sind = (d) => sin(d * PI / 180);
+        const cosd = (d) => cos(d * PI / 180);
+        const tand = (d) => tan(d * PI / 180);
+        return (${s});`
+      )();
+      return Number.isFinite(v) ? v : null;
+    } catch {
+      return null;
+    }
+  };
+
   const parsePoly = (raw) => {
     // returns coeffs low->high for ax^2+bx+c style up to degree 6-ish
     let s = raw.replace(/\s+/g, "").replace(/−/g, "-").replace(/\*\*/g, "^");
@@ -718,8 +770,682 @@ window.LumenAI = (() => {
     };
   };
 
+  const solveCompoundInterestWord = (raw) => {
+    const flat = raw.replace(/,/g, "").replace(/\u00a0/g, " ");
+    if (!/compound/i.test(flat)) return null;
+    const principalM =
+      flat.match(
+        new RegExp(
+          `(?:deposit|invest|principal|put|save[sd]?)\\s*(?:of\\s*|is\\s*)?(?:₦\\s*)?(-?\\d+(?:\\.\\d+)?)\\s*${moneyWord}?`,
+          "i"
+        )
+      ) ||
+      flat.match(
+        new RegExp(`(?:₦\\s*)?(-?\\d+(?:\\.\\d+)?)\\s*${moneyWord}?\\s+into`, "i")
+      );
+    const rateM =
+      flat.match(/(-?\d+(?:\.\d+)?)\s*%\s*(?:compound|per\s*year|annual|interest)/i) ||
+      flat.match(/(?:rate|pays?|at)\s*(-?\d+(?:\.\d+)?)\s*%/i);
+    const timeM = flat.match(/(?:after|for|in)\s*(-?\d+(?:\.\d+)?)\s*(years?|yrs?|months?)/i);
+    if (!principalM || !rateM || !timeM) return null;
+    const P = parseLooseNumber(principalM[1]);
+    const rPct = parseLooseNumber(rateM[1]);
+    let t = parseLooseNumber(timeM[1]);
+    if (P == null || rPct == null || t == null) return null;
+    if (/month/.test(timeM[2])) t /= 12;
+    let n = 1;
+    if (/monthly|compounded\s+monthly/i.test(flat)) n = 12;
+    else if (/quarterly/i.test(flat)) n = 4;
+    else if (/daily/i.test(flat)) n = 365;
+    else if (/semi[- ]?annual|twice\s+a\s+year/i.test(flat)) n = 2;
+    const r = rPct / 100;
+    const A = P * (1 + r / n) ** (n * t);
+    const interest = A - P;
+    return {
+      answer: formatMoney(A),
+      steps: [
+        `Compound interest: A = P(1 + r/n)^(nt)`,
+        `P = ${formatMoney(P)}, r = ${formatQty(rPct)}%, n = ${n}/year, t = ${formatQty(t)} years`,
+        `A = ${formatMoney(P)} × (1 + ${formatQty(r)}/${n})^(${n}×${formatQty(t)}) = ${formatMoney(A)}`,
+        `Interest earned = ${formatMoney(interest)}`,
+      ],
+    };
+  };
+
+  const solvePercentChangeWord = (raw) => {
+    const flat = raw.replace(/,/g, "");
+    const m =
+      flat.match(
+        /(?:increase[sd]?|raised?|grew|grow)\s*(?:by\s*)?(-?\d+(?:\.\d+)?)\s*%\s*(?:from|of)?\s*(?:₦\s*)?(-?\d+(?:\.\d+)?)/i
+      ) ||
+      flat.match(
+        /(-?\d+(?:\.\d+)?)\s*%\s*(?:increase|rise|markup|vat|tax)\s*(?:on|of|from)?\s*(?:₦\s*)?(-?\d+(?:\.\d+)?)/i
+      );
+    const dec =
+      flat.match(
+        /(?:decrease[sd]?|reduce[sd]?|drop(?:ped)?|fell)\s*(?:by\s*)?(-?\d+(?:\.\d+)?)\s*%\s*(?:from|of)?\s*(?:₦\s*)?(-?\d+(?:\.\d+)?)/i
+      ) ||
+      flat.match(
+        /(-?\d+(?:\.\d+)?)\s*%\s*(?:decrease|reduction|markdown)\s*(?:on|of|from)?\s*(?:₦\s*)?(-?\d+(?:\.\d+)?)/i
+      );
+    if (m) {
+      const pct = parseLooseNumber(m[1]);
+      const base = parseLooseNumber(m[2]);
+      const v = base * (1 + pct / 100);
+      return {
+        answer: formatQty(v),
+        steps: [
+          `Increase ${formatQty(pct)}% of ${formatQty(base)}`,
+          `New = ${formatQty(base)} × (1 + ${formatQty(pct / 100)}) = ${formatQty(v)}`,
+        ],
+      };
+    }
+    if (dec) {
+      const pct = parseLooseNumber(dec[1]);
+      const base = parseLooseNumber(dec[2]);
+      const v = base * (1 - pct / 100);
+      return {
+        answer: formatQty(v),
+        steps: [
+          `Decrease ${formatQty(pct)}% of ${formatQty(base)}`,
+          `New = ${formatQty(base)} × (1 − ${formatQty(pct / 100)}) = ${formatQty(v)}`,
+        ],
+      };
+    }
+    const fromTo = flat.match(
+      /(?:percent(?:age)?\s*(?:change|increase|decrease)|%?\s*change)\s*(?:from\s*)?(-?\d+(?:\.\d+)?)\s*(?:to|→)\s*(-?\d+(?:\.\d+)?)/i
+    );
+    if (fromTo) {
+      const a = parseLooseNumber(fromTo[1]);
+      const b = parseLooseNumber(fromTo[2]);
+      if (!a) return null;
+      const pct = ((b - a) / a) * 100;
+      return {
+        answer: `${formatQty(pct)}%`,
+        steps: [
+          `Percent change = (new − old) / old × 100`,
+          `(${formatQty(b)} − ${formatQty(a)}) / ${formatQty(a)} × 100 = ${formatQty(pct)}%`,
+        ],
+      };
+    }
+    return null;
+  };
+
+  const parseLinEq = (eq) => {
+    // ax + by = c  (also ay + bx)
+    let s = eq.replace(/\s+/g, "").replace(/−/g, "-");
+    const sides = s.split("=");
+    if (sides.length !== 2) return null;
+    const parseSide = (side, sign) => {
+      const coeffs = { x: 0, y: 0, c: 0 };
+      const terms = side.match(/[+-]?[^+-]+/g) || [];
+      for (let term of terms) {
+        let sg = sign;
+        if (term.startsWith("+")) term = term.slice(1);
+        if (term.startsWith("-")) {
+          sg *= -1;
+          term = term.slice(1);
+        }
+        if (!term) continue;
+        if (/^\d*\.?\d*x$/i.test(term)) {
+          const n = term.slice(0, -1);
+          coeffs.x += sg * (n === "" ? 1 : Number(n));
+        } else if (/^\d*\.?\d*y$/i.test(term)) {
+          const n = term.slice(0, -1);
+          coeffs.y += sg * (n === "" ? 1 : Number(n));
+        } else if (/^\d+\.?\d*$/.test(term)) {
+          coeffs.c += sg * Number(term);
+        }
+      }
+      return coeffs;
+    };
+    const L = parseSide(sides[0], 1);
+    const R = parseSide(sides[1], -1);
+    return {
+      a: L.x + R.x,
+      b: L.y + R.y,
+      c: -(L.c + R.c),
+    };
+  };
+
+  const solveSystem2 = (raw) => {
+    const flat = raw.replace(/\u00a0/g, " ");
+    if (!/\by\b/i.test(flat) || !/\bx\b/i.test(flat)) return null;
+    const eqs = flat.match(/[^;\n]+?=[^;\n]+/g);
+    if (!eqs || eqs.length < 2) return null;
+    const cleaned = eqs
+      .map((e) => e.replace(/solve|system|equations?|and/gi, "").trim())
+      .filter((e) => /[xy]/i.test(e) && /=/.test(e));
+    if (cleaned.length < 2) return null;
+    const e1 = parseLinEq(cleaned[0]);
+    const e2 = parseLinEq(cleaned[1]);
+    if (!e1 || !e2) return null;
+    const { a: a1, b: b1, c: c1 } = e1;
+    const { a: a2, b: b2, c: c2 } = e2;
+    const det = a1 * b2 - a2 * b1;
+    if (Math.abs(det) < 1e-12) {
+      return { answer: "No unique solution (parallel or identical lines)", steps: [`Determinant = ${det}`] };
+    }
+    const x = (c1 * b2 - c2 * b1) / det;
+    const y = (a1 * c2 - a2 * c1) / det;
+    return {
+      answer: `x = ${formatQty(x)}, y = ${formatQty(y)}`,
+      steps: [
+        `Eq1: ${formatQty(a1)}x + ${formatQty(b1)}y = ${formatQty(c1)}`,
+        `Eq2: ${formatQty(a2)}x + ${formatQty(b2)}y = ${formatQty(c2)}`,
+        `Solved by elimination/Cramer's rule (Δ = ${formatQty(det)})`,
+        `x = ${formatQty(x)}, y = ${formatQty(y)}`,
+      ],
+    };
+  };
+
+  const solveTrig = (raw) => {
+    const flat = raw.replace(/\u00a0/g, " ");
+    // sin/cos/tan of angle in degrees
+    let m = flat.match(/\b(sin|cos|tan)\s*(?:of\s*)?(-?\d+(?:\.\d+)?)\s*(?:°|degrees?)?/i);
+    if (m && !/[xy=]/i.test(flat.split(m[0])[0]?.slice(-5) || "")) {
+      const fn = m[1].toLowerCase();
+      const deg = parseLooseNumber(m[2]);
+      const rad = (deg * Math.PI) / 180;
+      const v = fn === "sin" ? Math.sin(rad) : fn === "cos" ? Math.cos(rad) : Math.tan(rad);
+      return {
+        answer: formatQty(Math.round(v * 1e10) / 1e10),
+        steps: [`${fn}(${formatQty(deg)}°) in degrees`, `= ${formatQty(v)}`],
+      };
+    }
+    // right triangle: opposite/adjacent/hypotenuse
+    const opp = flat.match(/opposite\s*(?:side\s*)?(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i);
+    const adj = flat.match(/adjacent\s*(?:side\s*)?(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i);
+    const hyp = flat.match(/hypotenuse\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i);
+    const ang = flat.match(/angle\s*(?:is\s*|=\s*|of\s*)?(-?\d+(?:\.\d+)?)\s*(?:°|degrees?)?/i);
+    if (ang && (opp || adj || hyp)) {
+      const A = parseLooseNumber(ang[1]);
+      const rad = (A * Math.PI) / 180;
+      if (opp && /find\s*(?:the\s*)?hypotenuse|hypotenuse/i.test(flat) && !hyp) {
+        const o = parseLooseNumber(opp[1]);
+        const h = o / Math.sin(rad);
+        return {
+          answer: formatQty(h),
+          steps: [`sin(A) = opposite / hypotenuse`, `hypotenuse = ${formatQty(o)} / sin(${A}°) = ${formatQty(h)}`],
+        };
+      }
+      if (adj && /find\s*(?:the\s*)?hypotenuse|hypotenuse/i.test(flat) && !hyp) {
+        const a = parseLooseNumber(adj[1]);
+        const h = a / Math.cos(rad);
+        return {
+          answer: formatQty(h),
+          steps: [`cos(A) = adjacent / hypotenuse`, `hypotenuse = ${formatQty(a)} / cos(${A}°) = ${formatQty(h)}`],
+        };
+      }
+      if (opp && adj && /find\s*(?:the\s*)?angle|what\s+is\s+the\s+angle/i.test(flat)) {
+        const o = parseLooseNumber(opp[1]);
+        const a = parseLooseNumber(adj[1]);
+        const deg = (Math.atan2(o, a) * 180) / Math.PI;
+        return {
+          answer: `${formatQty(deg)}°`,
+          steps: [`tan⁻¹(opposite/adjacent) = tan⁻¹(${formatQty(o)}/${formatQty(a)}) = ${formatQty(deg)}°`],
+        };
+      }
+    }
+    // Pythagoras
+    m = flat.match(
+      /(?:pythagoras|pythagorean|right\s*triangle|right[- ]angled).*?(?:a\s*=\s*)?(-?\d+(?:\.\d+)?).*?(?:b\s*=\s*)?(-?\d+(?:\.\d+)?)/i
+    );
+    const legs = flat.match(
+      /(?:legs?|sides?)\s*(-?\d+(?:\.\d+)?)\s*(?:and|,)\s*(-?\d+(?:\.\d+)?).*?(?:hypotenuse|find\s+c)/i
+    );
+    const hypFind = flat.match(
+      /(?:hypotenuse|c)\s*(?:of\s*)?(?:a\s*)?right.*?(?:legs?|sides?)\s*(-?\d+(?:\.\d+)?)\s*(?:and|,)\s*(-?\d+(?:\.\d+)?)/i
+    );
+    const ab = legs || hypFind || m;
+    if (ab || /pythagoras|hypotenuse.*legs|legs.*hypotenuse/i.test(flat)) {
+      const nums = [...flat.matchAll(/(-?\d+(?:\.\d+)?)/g)].map((x) => parseLooseNumber(x[1]));
+      if (nums.length >= 2) {
+        const a = nums[0];
+        const b = nums[1];
+        if (/find\s*(?:leg|side)|missing\s*leg/i.test(flat) && nums.length >= 3) {
+          const h = Math.max(...nums.slice(0, 3));
+          const leg = nums.find((n) => n !== h);
+          const other = Math.sqrt(h * h - leg * leg);
+          return {
+            answer: formatQty(other),
+            steps: [`a² + b² = c² → b = √(c² − a²) = √(${h}² − ${leg}²) = ${formatQty(other)}`],
+          };
+        }
+        const c = Math.sqrt(a * a + b * b);
+        return {
+          answer: formatQty(c),
+          steps: [`a² + b² = c²`, `c = √(${formatQty(a)}² + ${formatQty(b)}²) = ${formatQty(c)}`],
+        };
+      }
+    }
+    return null;
+  };
+
+  const solveLogExp = (raw) => {
+    const flat = raw.replace(/\u00a0/g, " ");
+    let m = flat.match(/log\s*(?:base\s*)?(\d+(?:\.\d+)?)\s*(?:of\s*)?(\d+(?:\.\d+)?)/i);
+    if (m) {
+      const b = Number(m[1]);
+      const a = Number(m[2]);
+      const v = Math.log(a) / Math.log(b);
+      return {
+        answer: formatQty(v),
+        steps: [`log_${b}(${a}) = ln(${a})/ln(${b}) = ${formatQty(v)}`],
+      };
+    }
+    m = flat.match(/(?:solve\s+)?(\d+(?:\.\d+)?)\s*\^\s*x\s*=\s*(\d+(?:\.\d+)?)/i);
+    if (m) {
+      const a = Number(m[1]);
+      const b = Number(m[2]);
+      if (a <= 0 || b <= 0) return null;
+      const x = Math.log(b) / Math.log(a);
+      return {
+        answer: `x = ${formatQty(x)}`,
+        steps: [`${a}^x = ${b}`, `x = log(${b})/log(${a}) = ${formatQty(x)}`],
+      };
+    }
+    m = flat.match(/(?:solve\s+)?e\s*\^\s*x\s*=\s*(\d+(?:\.\d+)?)/i);
+    if (m) {
+      const b = Number(m[1]);
+      const x = Math.log(b);
+      return { answer: `x = ${formatQty(x)}`, steps: [`x = ln(${b}) = ${formatQty(x)}`] };
+    }
+    m = flat.match(/ln\s*\(?\s*(-?\d+(?:\.\d+)?)\s*\)?/i);
+    if (m && /ln|natural/i.test(flat)) {
+      const a = Number(m[1]);
+      if (a <= 0) return { answer: "undefined", steps: ["ln of non-positive is undefined"] };
+      return { answer: formatQty(Math.log(a)), steps: [`ln(${a}) = ${formatQty(Math.log(a))}`] };
+    }
+    return null;
+  };
+
+  const solveSequence = (raw) => {
+    const flat = raw.replace(/\u00a0/g, " ");
+    let m = flat.match(
+      /(?:arithmetic|AP).*?(?:first\s*term|a1|a\s*=\s*)(-?\d+(?:\.\d+)?).*?(?:common\s*difference|d\s*=\s*)(-?\d+(?:\.\d+)?).*?(?:n\s*=\s*|term\s*)(-?\d+)/i
+    );
+    if (!m) {
+      m = flat.match(
+        /AP\s*:\s*a\s*=\s*(-?\d+(?:\.\d+)?)\s*,\s*d\s*=\s*(-?\d+(?:\.\d+)?)\s*,\s*n\s*=\s*(-?\d+)/i
+      );
+    }
+    if (m) {
+      const a = Number(m[1]);
+      const d = Number(m[2]);
+      const n = Number(m[3]);
+      const an = a + (n - 1) * d;
+      const sum = (n / 2) * (2 * a + (n - 1) * d);
+      const wantSum = /sum|S_?n/i.test(flat);
+      return {
+        answer: wantSum ? formatQty(sum) : formatQty(an),
+        steps: wantSum
+          ? [`Sₙ = n/2 × (2a + (n−1)d)`, `S_${n} = ${formatQty(sum)}`]
+          : [`aₙ = a + (n−1)d = ${a} + (${n}−1)×${d} = ${formatQty(an)}`],
+      };
+    }
+    m = flat.match(
+      /(?:geometric|GP).*?(?:first\s*term|a\s*=\s*)(-?\d+(?:\.\d+)?).*?(?:common\s*ratio|r\s*=\s*)(-?\d+(?:\.\d+)?).*?(?:n\s*=\s*|term\s*)(-?\d+)/i
+    );
+    if (!m) {
+      m = flat.match(
+        /GP\s*:\s*a\s*=\s*(-?\d+(?:\.\d+)?)\s*,\s*r\s*=\s*(-?\d+(?:\.\d+)?)\s*,\s*n\s*=\s*(-?\d+)/i
+      );
+    }
+    if (m) {
+      const a = Number(m[1]);
+      const r = Number(m[2]);
+      const n = Number(m[3]);
+      const an = a * r ** (n - 1);
+      const sum = r === 1 ? n * a : (a * (r ** n - 1)) / (r - 1);
+      const wantSum = /sum|S_?n/i.test(flat);
+      return {
+        answer: wantSum ? formatQty(sum) : formatQty(an),
+        steps: wantSum
+          ? [`Sₙ = a(rⁿ − 1)/(r − 1)`, `S_${n} = ${formatQty(sum)}`]
+          : [`aₙ = arⁿ⁻¹ = ${formatQty(an)}`],
+      };
+    }
+    return null;
+  };
+
+  const solveCombinatorics = (raw) => {
+    const flat = raw.replace(/\u00a0/g, " ");
+    let m = flat.match(/(?:nCr|C\(|combination)\s*\(?\s*(\d+)\s*[, ]\s*(\d+)\s*\)?/i) ||
+      flat.match(/(\d+)\s*[Cc]\s*(\d+)/) ||
+      flat.match(/combin(?:ation|e)\s*(\d+)\s*(?:choose|from|things?).*?(\d+)/i) ||
+      flat.match(/(\d+)\s*choose\s*(\d+)/i);
+    if (m) {
+      let n = Number(m[1]);
+      let r = Number(m[2]);
+      if (/from\s+\d+\s+choose|combin.*from/i.test(flat) && Number(m[1]) < Number(m[2])) {
+        // "combine 3 from 10" style already handled by order in some patterns
+      }
+      if (flat.match(/from\s+(\d+).*?(\d+)\s*(?:at\s+a\s+time|items)/i)) {
+        const mm = flat.match(/from\s+(\d+).*?(\d+)/i);
+        if (mm) {
+          n = Number(mm[1]);
+          r = Number(mm[2]);
+        }
+      }
+      if (r > n) [n, r] = [r, n];
+      let c = 1;
+      for (let i = 1; i <= r; i++) c = (c * (n - r + i)) / i;
+      return {
+        answer: formatQty(c),
+        steps: [`C(${n},${r}) = n! / (r!(n−r)!)`, `= ${formatQty(c)}`],
+      };
+    }
+    m = flat.match(/(?:nPr|P\(|permutation)\s*\(?\s*(\d+)\s*[, ]\s*(\d+)\s*\)?/i) ||
+      flat.match(/(\d+)\s*[Pp]\s*(\d+)(?!\s*%)/) ||
+      flat.match(/permut(?:ation|e)\s*(\d+)\s*.*?(\d+)/i);
+    if (m) {
+      const n = Number(m[1]);
+      const r = Number(m[2]);
+      let p = 1;
+      for (let i = 0; i < r; i++) p *= n - i;
+      return {
+        answer: formatQty(p),
+        steps: [`P(${n},${r}) = n!/(n−r)!`, `= ${formatQty(p)}`],
+      };
+    }
+    m = flat.match(/(\d+)\s*!|factorial\s*(?:of\s*)?(\d+)/i);
+    if (m) {
+      const n = Number(m[1] || m[2]);
+      if (n > 170) return { answer: "too large", steps: ["Factorial overflow"] };
+      let f = 1;
+      for (let i = 2; i <= n; i++) f *= i;
+      return { answer: formatQty(f), steps: [`${n}! = ${formatQty(f)}`] };
+    }
+    return null;
+  };
+
+  const solveStats = (raw) => {
+    const flat = raw.replace(/\u00a0/g, " ");
+    const listM =
+      flat.match(
+        /(?:mean|median|mode|range|average|std(?:ev|andard\s*deviation)?|variance)\s*(?:of\s*)?\[?\s*([-\d.,\s]+)\s*\]?/i
+      ) ||
+      flat.match(/(?:numbers?|data|set)\s*[:\s]\s*([-\d.,\s]+)/i);
+    if (!listM && !/mean|median|mode|range|average|std/i.test(flat)) return null;
+    const nums = [...(listM ? listM[1] : flat).matchAll(/-?\d+(?:\.\d+)?/g)]
+      .map((x) => Number(x[0]))
+      .filter((n) => Number.isFinite(n));
+    // Avoid grabbing stray words' numbers only — need enough data points
+    if (nums.length < 2) return null;
+    // If the question embeds many non-data numbers, prefer bracketed/list form
+    const sorted = [...nums].sort((a, b) => a - b);
+    const n = sorted.length;
+    const sum = sorted.reduce((a, b) => a + b, 0);
+    const mean = sum / n;
+    const median =
+      n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+    const freq = {};
+    sorted.forEach((v) => {
+      freq[v] = (freq[v] || 0) + 1;
+    });
+    const maxF = Math.max(...Object.values(freq));
+    const modes = Object.keys(freq)
+      .filter((k) => freq[k] === maxF)
+      .map(Number);
+    const range = sorted[n - 1] - sorted[0];
+    const variance = sorted.reduce((a, v) => a + (v - mean) ** 2, 0) / n;
+    const stdev = Math.sqrt(variance);
+
+    if (/median/i.test(flat)) {
+      return {
+        answer: formatQty(median),
+        steps: [`Sorted: ${sorted.join(", ")}`, `Median = ${formatQty(median)}`],
+      };
+    }
+    if (/mode/i.test(flat)) {
+      return {
+        answer: modes.map(formatQty).join(", "),
+        steps: [`Most frequent value(s)`, `Mode = ${modes.map(formatQty).join(", ")}`],
+      };
+    }
+    if (/range/i.test(flat)) {
+      return {
+        answer: formatQty(range),
+        steps: [`Range = max − min = ${sorted[n - 1]} − ${sorted[0]} = ${formatQty(range)}`],
+      };
+    }
+    if (/std|standard\s*deviation/i.test(flat)) {
+      return {
+        answer: formatQty(stdev),
+        steps: [`Population σ = √(Σ(x−μ)²/n)`, `σ = ${formatQty(stdev)}`],
+      };
+    }
+    if (/variance/i.test(flat)) {
+      return {
+        answer: formatQty(variance),
+        steps: [`Variance = Σ(x−μ)²/n = ${formatQty(variance)}`],
+      };
+    }
+    if (/mean|average/i.test(flat)) {
+      return {
+        answer: formatQty(mean),
+        steps: [`Mean = sum/n = ${formatQty(sum)}/${n} = ${formatQty(mean)}`],
+      };
+    }
+    return null;
+  };
+
+  const solveGeometry = (raw) => {
+    const flat = raw.replace(/,/g, "").replace(/\u00a0/g, " ");
+    let m;
+    // Circle
+    m = flat.match(
+      /(?:area|circumference|perimeter)\s*(?:of\s*)?(?:a\s*)?circle.*?(?:radius|r)\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i
+    ) ||
+      flat.match(/circle.*?radius\s*(-?\d+(?:\.\d+)?).*?(area|circumference)/i);
+    if (m || (/circle/i.test(flat) && /radius/i.test(flat))) {
+      const rM = flat.match(/radius\s*(?:is\s*|=\s*|of\s*)?(-?\d+(?:\.\d+)?)/i);
+      if (!rM) return null;
+      const r = parseLooseNumber(rM[1]);
+      if (/circumference|perimeter/i.test(flat)) {
+        const c = 2 * Math.PI * r;
+        return {
+          answer: formatQty(c),
+          steps: [`C = 2πr = 2π(${formatQty(r)}) = ${formatQty(c)}`],
+        };
+      }
+      const area = Math.PI * r * r;
+      return {
+        answer: formatQty(area),
+        steps: [`A = πr² = π(${formatQty(r)})² = ${formatQty(area)}`],
+      };
+    }
+    // Rectangle
+    m = flat.match(
+      /(?:area|perimeter)\s*(?:of\s*)?(?:a\s*)?rectangl.*?(?:length|l)\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?).*?(?:width|w|breadth)\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i
+    );
+    const lw = flat.match(
+      /rectangl.*?(?:length|l)\s*(-?\d+(?:\.\d+)?).*?(?:width|breadth|w)\s*(-?\d+(?:\.\d+)?)/i
+    );
+    if (m || lw) {
+      const L = parseLooseNumber((m || lw)[1]);
+      const W = parseLooseNumber((m || lw)[2]);
+      if (/perimeter/i.test(flat)) {
+        const p = 2 * (L + W);
+        return {
+          answer: formatQty(p),
+          steps: [`P = 2(L+W) = 2(${formatQty(L)}+${formatQty(W)}) = ${formatQty(p)}`],
+        };
+      }
+      return {
+        answer: formatQty(L * W),
+        steps: [`A = L×W = ${formatQty(L)}×${formatQty(W)} = ${formatQty(L * W)}`],
+      };
+    }
+    // Triangle area
+    m = flat.match(
+      /(?:area\s*(?:of\s*)?(?:a\s*)?triangle|triangle.*area).*?(?:base|b)\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?).*?(?:height|h)\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i
+    );
+    if (m || (/triangle/i.test(flat) && /base/i.test(flat) && /height/i.test(flat))) {
+      const bM = flat.match(/base\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i);
+      const hM = flat.match(/height\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i);
+      if (bM && hM) {
+        const b = parseLooseNumber(bM[1]);
+        const h = parseLooseNumber(hM[1]);
+        const a = 0.5 * b * h;
+        return {
+          answer: formatQty(a),
+          steps: [`A = ½bh = ½×${formatQty(b)}×${formatQty(h)} = ${formatQty(a)}`],
+        };
+      }
+    }
+    // Cylinder volume
+    if (/cylinder/i.test(flat) && /volume|capacity/i.test(flat)) {
+      const rM = flat.match(/radius\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i);
+      const hM = flat.match(/height\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i);
+      if (rM && hM) {
+        const r = parseLooseNumber(rM[1]);
+        const h = parseLooseNumber(hM[1]);
+        const v = Math.PI * r * r * h;
+        return {
+          answer: formatQty(v),
+          steps: [`V = πr²h = π(${formatQty(r)})²(${formatQty(h)}) = ${formatQty(v)}`],
+        };
+      }
+    }
+    // Sphere
+    if (/sphere/i.test(flat) && (/volume|area|surface/i.test(flat))) {
+      const rM = flat.match(/radius\s*(?:is\s*|=\s*)?(-?\d+(?:\.\d+)?)/i);
+      if (rM) {
+        const r = parseLooseNumber(rM[1]);
+        if (/volume/i.test(flat)) {
+          const v = (4 / 3) * Math.PI * r ** 3;
+          return {
+            answer: formatQty(v),
+            steps: [`V = ⁴⁄₃πr³ = ${formatQty(v)}`],
+          };
+        }
+        const a = 4 * Math.PI * r * r;
+        return {
+          answer: formatQty(a),
+          steps: [`A = 4πr² = ${formatQty(a)}`],
+        };
+      }
+    }
+    return null;
+  };
+
+  const solveWorkRate = (raw) => {
+    const flat = raw.replace(/,/g, "").replace(/\u00a0/g, " ");
+    // A does in X hours, B in Y hours, together?
+    const m = flat.match(
+      /(?:A|one)\s*(?:can\s*)?(?:do|finish|complete).*?(-?\d+(?:\.\d+)?)\s*(?:hours?|days?).*?(?:B|another|other).*?(-?\d+(?:\.\d+)?)\s*(?:hours?|days?).*?(?:together|combined|both)/i
+    );
+    const m2 = flat.match(
+      /(-?\d+(?:\.\d+)?)\s*(?:hours?|days?).+?(-?\d+(?:\.\d+)?)\s*(?:hours?|days?).+(?:together|combined)/i
+    );
+    if (m || m2) {
+      const src = m || m2;
+      const a = parseLooseNumber(src[1]);
+      const b = parseLooseNumber(src[2]);
+      if (!a || !b) return null;
+      const t = 1 / (1 / a + 1 / b);
+      return {
+        answer: `${formatQty(t)} hours`,
+        steps: [
+          `Rates: 1/${formatQty(a)} + 1/${formatQty(b)} per hour`,
+          `Together time = 1 / (1/a + 1/b) = ${formatQty(t)} hours`,
+        ],
+      };
+    }
+    return null;
+  };
+
+  const solveProbability = (raw) => {
+    const flat = raw.replace(/\u00a0/g, " ");
+    let m = flat.match(
+      /probability.*?(?:rolling|roll).*?(\d+).*?(?:die|dice)/i
+    );
+    if (m || (/die|dice/i.test(flat) && /probability|chance/i.test(flat))) {
+      const face = flat.match(/(?:rolling|roll(?:ing)?|getting|get)\s*(?:a\s*)?(\d+)/i);
+      if (face) {
+        const f = Number(face[1]);
+        if (f >= 1 && f <= 6) {
+          return {
+            answer: "1/6",
+            steps: [`Fair six-sided die`, `P(${f}) = 1/6 ≈ ${formatQty(1 / 6)}`],
+          };
+        }
+      }
+      if (/even/i.test(flat)) {
+        return { answer: "1/2", steps: ["Even faces: 2,4,6 → 3/6 = 1/2"] };
+      }
+    }
+    m = flat.match(/P\s*\(\s*(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)\s*\)/i);
+    if (m) {
+      const a = Number(m[1]);
+      const b = Number(m[2]);
+      return {
+        answer: formatQty(a / b),
+        steps: [`P = ${a}/${b} = ${formatQty(a / b)}`],
+      };
+    }
+    m = flat.match(
+      /(?:probability|chance)\s*(?:of\s*)?(-?\d+)\s*(?:out\s*of|in|\/)\s*(-?\d+)/i
+    );
+    if (m) {
+      const a = Number(m[1]);
+      const b = Number(m[2]);
+      return {
+        answer: formatQty(a / b),
+        steps: [`P = favorable/total = ${a}/${b} = ${formatQty(a / b)}`],
+      };
+    }
+    return null;
+  };
+
+  const solveSecondDerivative = (raw) => {
+    const m = raw.match(/(?:second\s*derivative|d\^2\/dx\^2|f''|differentiate\s+twice)\s*(?:of\s*)?(.+)/i);
+    if (!m) return null;
+    const c1 = derivative(parsePoly(m[1]));
+    const c2 = derivative(c1);
+    return {
+      answer: polyToString(c2),
+      steps: [
+        `f(x) = ${polyToString(parsePoly(m[1]))}`,
+        `f'(x) = ${polyToString(c1)}`,
+        `f''(x) = ${polyToString(c2)}`,
+      ],
+    };
+  };
+
+  const solveDefiniteIntegral = (raw) => {
+    const m = raw.match(
+      /(?:integrate|integral|∫)\s+(.+?)\s+(?:from\s+)?(-?\d+(?:\.\d+)?)\s+to\s+(-?\d+(?:\.\d+)?)/i
+    );
+    if (!m) return null;
+    const coeffs = parsePoly(m[1].replace(/dx/i, "").trim());
+    const F = integrate(coeffs);
+    const evalPoly = (c, x) =>
+      Object.keys(c).reduce((s, p) => s + c[p] * x ** Number(p), 0);
+    const a = Number(m[2]);
+    const b = Number(m[3]);
+    const v = evalPoly(F, b) - evalPoly(F, a);
+    return {
+      answer: formatQty(v),
+      steps: [
+        `∫ f(x) dx = ${polyToString(F)} + C`,
+        `Evaluate from ${a} to ${b}`,
+        `F(${b}) − F(${a}) = ${formatQty(v)}`,
+      ],
+    };
+  };
+
+  const normalizeQuestion = (raw) =>
+    raw
+      .replace(/\u00a0/g, " ")
+      .replace(/question\s*:\s*/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
   const think = (raw) => {
-    const q = raw.trim();
+    const q = normalizeQuestion(raw);
     if (!q) {
       return { answer: "Ask a math question first", steps: [] };
     }
@@ -727,26 +1453,32 @@ window.LumenAI = (() => {
     const temp = window.LumenUnits?.answerTempPrompt?.(q);
     if (temp) return temp;
 
-    const discount = solveDiscountWord(q);
-    if (discount) return discount;
-
-    const interest = solveSimpleInterestWord(q);
-    if (interest) return interest;
-
-    const budget = solveBudgetWord(q);
-    if (budget) return budget;
-
-    const motion = solveMotionWord(q);
-    if (motion) return motion;
-
-    const proportion = solveProportionWord(q);
-    if (proportion) return proportion;
-
-    const unitRate = solveUnitRateWord(q);
-    if (unitRate) return unitRate;
-
-    const costWord = solveCostWord(q);
-    if (costWord) return costWord;
+    const pipeline = [
+      solveDiscountWord,
+      solveCompoundInterestWord,
+      solveSimpleInterestWord,
+      solvePercentChangeWord,
+      solveBudgetWord,
+      solveMotionWord,
+      solveProportionWord,
+      solveUnitRateWord,
+      solveCostWord,
+      solveWorkRate,
+      solveGeometry,
+      solveTrig,
+      solveSystem2,
+      solveLogExp,
+      solveSequence,
+      solveCombinatorics,
+      solveStats,
+      solveProbability,
+      solveSecondDerivative,
+      solveDefiniteIntegral,
+    ];
+    for (const fn of pipeline) {
+      const r = fn(q);
+      if (r) return r;
+    }
 
     let m = q.match(/(?:derivative|differentiate|d\/dx)\s+(?:of\s+)?(.+)/i);
     if (m) {
@@ -824,26 +1556,25 @@ window.LumenAI = (() => {
       if (lin) return lin;
     }
 
-    // arithmetic phrase: what is 2+2
-    m = q.match(/(?:what\s+is|calculate|compute|eval(?:uate)?)\s+(.+)/i);
+    m = q.match(/(?:what\s+is|calculate|compute|eval(?:uate)?|find)\s+(.+)/i);
     if (m) {
-      const v = evalSimple(m[1]);
+      const v = evalMath(m[1]) ?? evalSimple(m[1]);
       if (v !== null) return { answer: String(v), steps: [`Evaluated ${m[1]}`, `= ${v}`] };
     }
 
-    const direct = evalSimple(q);
+    const direct = evalMath(q) ?? evalSimple(q);
     if (direct !== null) {
-      return { answer: String(direct), steps: ["Parsed as arithmetic expression", `= ${direct}`] };
+      return { answer: String(direct), steps: ["Parsed as math expression", `= ${direct}`] };
     }
 
     return {
       answer: "I couldn't parse that yet",
       steps: [
-        "Try: shoes cost ₦25000 with 20% discount — how much to pay?",
-        "salary ₦180000 spend on food/rent… — how much left?",
-        "120 km at 60 km/h — how long? · 3 cups for 6 people → for 10?",
-        "₦100000 at 8% simple interest for 3 years — total?",
-        "fuel for 15000 at 1370/liter · solve 2x+5=17 · 15% of 240",
+        "Everyday: discount, budget, fuel, travel time, recipes, simple/compound interest",
+        "Advanced: solve 2x+3y=7; x−y=1 · AP/GP · mean of 2,5,8,11",
+        "Calc: derivative / integrate x^2 from 0 to 3 · second derivative of x^4",
+        "More: sin 30 · log base 2 of 8 · 10 C 3 · area of circle radius 7",
+        "Also: 2^x = 32 · Pythagoras legs 3 and 4 · work-rate together times",
       ],
     };
   };

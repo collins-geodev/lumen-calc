@@ -13,7 +13,7 @@ Continuous deployment is enabled: every push to `main` deploys to Vercel.
 - **FX** — live currency conversion for 150+ currencies (searchable dropdowns)
 - **Units** — length, mass, temperature, data, energy, and more
 - **Code** — HEX / DEC / OCT / BIN with bitwise operations
-- **AI** — plain-English math with step-by-step answers (runs locally in the browser)
+- **AI** — local plain-English + advanced math: word problems (discount, budget, travel, recipes, interest), algebra (linear/quadratic/systems), calculus, trig, logs, sequences, combinatorics, stats, geometry, work-rate, and more — with step-by-step answers
 
 ## Stack
 
