@@ -1776,64 +1776,220 @@ window.LumenAI = (() => {
     ) || /\b(who is|what is|what are|where is|capital of|meaning of|definition of)\b/i.test(q);
   };
 
-  const answerGeneralSubject = async (q) => {
-    const topic = q
+  const wikiHeaders = {
+    Accept: "application/json",
+    "Api-User-Agent":
+      "OdogwuCalc/1.0 (https://github.com/collins-geodev/lumen-calc; educational calculator)",
+  };
+
+  const wikiSearch = async (term) => {
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(
+      term
+    )}&limit=3&namespace=0&format=json&origin=*`;
+    const search = await fetch(searchUrl, { headers: wikiHeaders }).then((r) => r.json());
+    return {
+      title: search?.[1]?.[0] || null,
+      titles: search?.[1] || [],
+      pageUrl: search?.[3]?.[0] || null,
+    };
+  };
+
+  const wikiExtract = async (title, chars = 1400) => {
+    const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exchars=${chars}&titles=${encodeURIComponent(
+      title
+    )}&format=json&origin=*`;
+    const extractData = await fetch(extractUrl, { headers: wikiHeaders }).then((r) => r.json());
+    const page = Object.values(extractData?.query?.pages || {})[0];
+    if (!page || page.missing != null || !page.extract) return null;
+    return { title: page.title, extract: page.extract };
+  };
+
+  const wikiSummary = async (title) => {
+    const sumRes = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, "_"))}`,
+      { headers: wikiHeaders }
+    );
+    if (!sumRes.ok) return null;
+    const sum = await sumRes.json();
+    if (!sum?.extract) return null;
+    return sum;
+  };
+
+  const wikidataLabel = async (id) => {
+    const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${id}&props=labels|descriptions|sitelinks&languages=en&format=json&origin=*`;
+    const data = await fetch(url, { headers: wikiHeaders }).then((r) => r.json());
+    const ent = data?.entities?.[id];
+    if (!ent) return null;
+    return {
+      id,
+      label: ent.labels?.en?.value || id,
+      description: ent.descriptions?.en?.value || "",
+      wikiTitle: ent.sitelinks?.enwiki?.title || null,
+    };
+  };
+
+  /** Resolve current office-holders / capital via Wikidata. */
+  const resolveOfficeHolder = async (role, place) => {
+    try {
+      const roleKey = role.toLowerCase();
+      // P35 = head of state, P6 = head of government, P36 = capital
+      const props =
+        roleKey === "capital"
+          ? ["P36"]
+          : /prime\s*minister|premier|chancellor/i.test(roleKey)
+            ? ["P6", "P35"]
+            : /president|king|queen|monarch|emperor|governor|mayor|head of state/i.test(roleKey)
+              ? ["P35", "P6"]
+              : ["P35", "P6"];
+
+      const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(
+        place
+      )}&language=en&type=item&limit=8&format=json&origin=*`;
+      const found = await fetch(searchUrl, { headers: wikiHeaders }).then((r) => r.json());
+      const hits = found?.search || [];
+      const entity =
+        hits.find((h) =>
+          /country|sovereign|state|nation|federal|republic|kingdom|city/i.test(h.description || "")
+        ) || hits[0];
+      if (!entity?.id) return null;
+
+      const entUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${entity.id}&props=claims&format=json&origin=*`;
+      const entData = await fetch(entUrl, { headers: wikiHeaders }).then((r) => r.json());
+      const claimBag = entData?.entities?.[entity.id]?.claims || {};
+
+      for (const prop of props) {
+        const claims = claimBag[prop];
+        if (!claims?.length) continue;
+        const preferred = claims.find((c) => c.rank === "preferred") || claims[0];
+        const id = preferred?.mainsnak?.datavalue?.value?.id;
+        if (id) return wikidataLabel(id);
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const parseGeneralIntent = (q) => {
+    const cleaned = q.replace(/\?+$/g, "").trim();
+    // "What is the name of the president of Nigeria?"
+    let m = cleaned.match(
+      /(?:what\s+is\s+(?:the\s+)?name\s+of|who\s+is|who'?s|name\s+(?:of\s+)?(?:the\s+)?(?:current\s+)?)\s*(?:the\s+)?(?:current\s+)?(president|prime\s*minister|king|queen|governor|mayor|chancellor|premier)\s+of\s+(.+)/i
+    );
+    if (m) {
+      return {
+        kind: "office",
+        role: m[1].replace(/\s+/g, " ").trim(),
+        place: m[2].replace(/^(the|a|an)\s+/i, "").trim(),
+        searches: [
+          `${m[1]} of ${m[2]}`.replace(/^(the\s+)/i, ""),
+          `current ${m[1]} of ${m[2]}`,
+          m[2].replace(/^(the|a|an)\s+/i, "").trim(),
+        ],
+      };
+    }
+    m = cleaned.match(
+      /(?:what\s+is\s+)?(?:the\s+)?(?:current\s+)?(president|prime\s*minister|king|queen|governor|mayor)\s+of\s+(.+)/i
+    );
+    if (m) {
+      return {
+        kind: "office",
+        role: m[1].replace(/\s+/g, " ").trim(),
+        place: m[2].replace(/^(the|a|an)\s+/i, "").trim(),
+        searches: [`${m[1]} of ${m[2]}`, m[2].replace(/^(the|a|an)\s+/i, "").trim()],
+      };
+    }
+    m = cleaned.match(/(?:what\s+is\s+)?(?:the\s+)?capital\s+(?:city\s+)?of\s+(.+)/i);
+    if (m) {
+      return {
+        kind: "capital",
+        role: "capital",
+        place: m[1].replace(/^(the|a|an)\s+/i, "").trim(),
+        searches: [`capital of ${m[1]}`, m[1].trim()],
+      };
+    }
+    const topic = cleaned
       .replace(
         /^(please\s+)?(can you\s+)?(tell me\s+)?(about\s+|explain\s+|define\s+|describe\s+|what is\s+|what are\s+|who is\s+|who was\s+|where is\s+|when was\s+|why is\s+|how does\s+|how do\s+)?/i,
         ""
       )
       .replace(/^(the|a|an)\s+/i, "")
-      .replace(/\?+$/g, "")
       .trim();
-    if (topic.length < 2) return null;
+    return { kind: "topic", searches: topic ? [topic, cleaned] : [cleaned] };
+  };
 
-    const wikiHeaders = {
-      Accept: "application/json",
-      "Api-User-Agent": "OdogwuCalc/1.0 (https://github.com/collins-geodev/lumen-calc; educational calculator)",
-    };
-
+  const answerGeneralSubject = async (q) => {
+    const intent = parseGeneralIntent(q);
     try {
-      const searchUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(
-        topic
-      )}&limit=1&namespace=0&format=json&origin=*`;
-      const search = await fetch(searchUrl, { headers: wikiHeaders }).then((r) => r.json());
-      const title = search?.[1]?.[0];
-      const pageUrl = search?.[3]?.[0];
-
-      if (title) {
-        const sumRes = await fetch(
-          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, "_"))}`,
-          { headers: wikiHeaders }
-        );
-        if (sumRes.ok) {
-          const sum = await sumRes.json();
-          if (sum?.extract) {
-            return {
-              answer: sum.extract,
-              steps: [
-                `Subject: ${sum.title}${sum.description ? ` — ${sum.description}` : ""}`,
-                "General knowledge answer (Wikipedia)",
-                sum.content_urls?.desktop?.page || pageUrl
-                  ? `Source: ${sum.content_urls?.desktop?.page || pageUrl}`
-                  : "Source: Wikipedia",
-              ],
-            };
+      // 1) Direct office-holder / capital via Wikidata (precise)
+      if (intent.kind === "office" || intent.kind === "capital") {
+        const holder = await resolveOfficeHolder(intent.role, intent.place);
+        if (holder?.label) {
+          let detail = holder.description || "";
+          let source = `https://www.wikidata.org/wiki/${holder.id}`;
+          if (holder.wikiTitle) {
+            try {
+              const bio =
+                (await wikiExtract(holder.wikiTitle, 1200)) || (await wikiSummary(holder.wikiTitle));
+              if (bio?.extract) detail = bio.extract;
+              source = `https://en.wikipedia.org/wiki/${encodeURIComponent(
+                holder.wikiTitle.replace(/ /g, "_")
+              )}`;
+            } catch {
+              /* keep short description */
+            }
           }
-        }
-        // Fallback: plain extract via action=query
-        const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&titles=${encodeURIComponent(
-          title
-        )}&format=json&origin=*`;
-        const extractData = await fetch(extractUrl, { headers: wikiHeaders }).then((r) => r.json());
-        const pages = extractData?.query?.pages || {};
-        const page = Object.values(pages)[0];
-        if (page?.extract) {
+          const roleLabel = intent.role.replace(/\b\w/g, (c) => c.toUpperCase());
+          const lead =
+            intent.kind === "capital"
+              ? `The capital of ${intent.place} is ${holder.label}.`
+              : `The current ${intent.role.toLowerCase()} of ${intent.place} is ${holder.label}.`;
           return {
-            answer: page.extract,
+            answer: detail ? `${lead}\n\n${detail}` : lead,
             steps: [
-              `Subject: ${page.title}`,
-              "General knowledge answer (Wikipedia)",
-              pageUrl ? `Source: ${pageUrl}` : "Source: Wikipedia",
+              `Direct answer: ${holder.label}`,
+              holder.description ? `About: ${holder.description}` : `Role: ${roleLabel} of ${intent.place}`,
+              `Source: ${source}`,
+            ],
+          };
+        }
+      }
+
+      // 2) Wikipedia with richer extracts (multiple search attempts)
+      for (const term of intent.searches) {
+        if (!term || term.length < 2) continue;
+        const { title, pageUrl, titles } = await wikiSearch(term);
+        const candidates = titles.length ? titles : title ? [title] : [];
+        for (const t of candidates.slice(0, 2)) {
+          const long = await wikiExtract(t, 1600);
+          const sum = long || (await wikiSummary(t));
+          if (!sum?.extract) continue;
+          // Prefer pages that mention a person name for office questions
+          if (intent.kind === "office") {
+            const incumbent = sum.extract.match(
+              /(?:Incumbent|currently|current[^\n.]{0,40}?is)\s+([A-Z][\w.'-]+(?:\s+[A-Z][\w.'-]+){1,4})/
+            );
+            if (incumbent) {
+              return {
+                answer: `The current ${intent.role.toLowerCase()} of ${intent.place} is ${incumbent[1]}.\n\n${sum.extract}`,
+                steps: [
+                  `Direct answer: ${incumbent[1]}`,
+                  `Subject: ${sum.title || t}`,
+                  pageUrl || sum.content_urls?.desktop?.page
+                    ? `Source: ${sum.content_urls?.desktop?.page || pageUrl}`
+                    : "Source: Wikipedia",
+                ],
+              };
+            }
+          }
+          return {
+            answer: sum.extract,
+            steps: [
+              `Subject: ${sum.title || t}${sum.description ? ` — ${sum.description}` : ""}`,
+              "Detailed general knowledge (Wikipedia)",
+              pageUrl || sum.content_urls?.desktop?.page
+                ? `Source: ${sum.content_urls?.desktop?.page || pageUrl}`
+                : "Source: Wikipedia",
             ],
           };
         }
@@ -1847,7 +2003,7 @@ window.LumenAI = (() => {
         return {
           answer: text,
           steps: [
-            `General knowledge: ${ddg.Heading || topic}`,
+            `General knowledge: ${ddg.Heading || intent.searches[0]}`,
             ddg.AbstractURL ? `Source: ${ddg.AbstractURL}` : "Source: DuckDuckGo",
           ],
         };
@@ -2020,7 +2176,15 @@ window.LumenAI = (() => {
   };
 
   const render = (result) => {
-    document.getElementById("aiAnswer").textContent = result.answer;
+    const el = document.getElementById("aiAnswer");
+    const answer = result.answer || "";
+    el.textContent = answer;
+    const isShortMath =
+      answer.length <= 48 &&
+      !/\n/.test(answer) &&
+      !(result.steps || []).some((s) => /wikipedia|wikidata|general knowledge|subject:/i.test(s));
+    el.classList.toggle("ai-answer-compact", isShortMath);
+    el.classList.add("ai-answer");
     const steps = document.getElementById("aiSteps");
     steps.innerHTML = (result.steps || [])
       .map((s, i) => `<div class="ai-step"><span>${i + 1}</span><p>${s}</p></div>`)

@@ -1034,6 +1034,31 @@ body {
   word-break: break-word;
 }
 
+/* AI answers (especially long general-knowledge prose) stay readable */
+#aiAnswer,
+.ai-answer {
+  font-family: Outfit, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  text-shadow: none;
+  color: #e8edff;
+  max-height: min(42vh, 320px);
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+#aiAnswer.ai-answer-compact {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: clamp(18px, 4vw, 26px);
+  font-weight: 700;
+  line-height: 1.25;
+  text-shadow: 0 0 20px rgba(92, 242, 255, 0.28);
+  max-height: none;
+  white-space: normal;
+}
+
 .feature-meta {
   color: var(--muted);
   font-size: 11px;
