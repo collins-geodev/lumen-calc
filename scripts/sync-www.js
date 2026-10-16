@@ -15,6 +15,7 @@ const files = [
   "units.js",
   "manifest.webmanifest",
   "sw.js",
+  "favicon.ico",
 ];
 
 fs.mkdirSync(www, { recursive: true });

@@ -1,24 +1,42 @@
 {
   "name": "Odogwu-Calc",
-  "short_name": "Odogwu",
+  "short_name": "Odogwu-Calc",
   "description": "Odogwu-Calc — Built by Collins Anyanwu. Smart dark scientific calculator with FX, units, programmer, and AI math",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#05060c",
+  "background_color": "#ffffff",
   "theme_color": "#05060c",
   "orientation": "portrait",
   "icons": [
     {
+      "src": "icons/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

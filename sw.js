@@ -1,4 +1,4 @@
-const CACHE = "odogwu-v5";
+const CACHE = "odogwu-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -11,6 +11,11 @@ const ASSETS = [
   "./programmer.js",
   "./units.js",
   "./manifest.webmanifest",
+  "./favicon.ico",
+  "./icons/favicon-16.png",
+  "./icons/favicon-32.png",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {

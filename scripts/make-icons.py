@@ -33,6 +33,13 @@ def save_png(im, path, size):
 img.save(os.path.join(icons, "odogwu-calc-logo.png"), "PNG")
 save_png(img, os.path.join(icons, "icon-512.png"), 512)
 save_png(img, os.path.join(icons, "icon-192.png"), 192)
+save_png(img, os.path.join(icons, "favicon-48.png"), 48)
+save_png(img, os.path.join(icons, "favicon-32.png"), 32)
+save_png(img, os.path.join(icons, "favicon-16.png"), 16)
+
+# Root favicon.ico for browser tabs
+ico_imgs = [img.resize(s, Image.Resampling.LANCZOS) for s in ((16, 16), (32, 32), (48, 48))]
+ico_imgs[0].save(os.path.join(root, "favicon.ico"), format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
 
 
 def rounded(im, size, radius_ratio=0.22):
