@@ -2,7 +2,10 @@
 
 A dark, glassmorphic calculator with scientific tools, live FX, units conversion, programmer mode, and local AI math assist.
 
-**Live app:** [https://lumen-calc-iota.vercel.app](https://lumen-calc-iota.vercel.app)
+**Live app:** [https://lumen-calc-iota.vercel.app](https://lumen-calc-iota.vercel.app)  
+**GitHub:** [collins-geodev/lumen-calc](https://github.com/collins-geodev/lumen-calc)
+
+Continuous deployment is enabled: every push to `main` deploys to Vercel.
 
 ## Features
 
